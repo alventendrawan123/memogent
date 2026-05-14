@@ -1,0 +1,76 @@
+# ============================================
+# CRITICAL — Reference materials (DO NOT COMMIT)
+# Contains SomMemo source + private keys
+# ============================================
+reference/
+reference/**
+
+# ============================================
+# Secrets — never commit
+# ============================================
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+private/
+
+# ============================================
+# Node / TypeScript (for agent/ and frontend/)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp.*
+.yarn/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ============================================
+# Foundry (for sc/)
+# ============================================
+sc/out/
+sc/cache/
+sc/lib/
+sc/.env
+sc/broadcast/*/dry-run/
+
+# ============================================
+# Hardhat artifacts (legacy, in case)
+# ============================================
+artifacts/
+cache/
+typechain-types/
+
+# ============================================
+# OS / Editor
+# ============================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================
+# Logs / coverage
+# ============================================
+logs/
+*.log
+coverage/
+coverage.json
+.nyc_output/
+
+# ============================================
+# Temp
+# ============================================
+tmp/
+temp/
+*.tmp
