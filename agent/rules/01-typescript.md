@@ -58,17 +58,18 @@ export async function computeRisk(signals) { ... }
 
 ## Dependencies — locked choices
 
-| Purpose | Package |
-|---|---|
-| EVM client | `ethers` v6 (NOT v5; matches SomMemo) |
-| Somnia Agent Kit | TBD package name — confirm during W1 |
-| Telegram Bot API | `telegraf` |
-| Env loading | `dotenv` |
-| Logging | `pino` |
-| Local store | `better-sqlite3` |
-| Tests | `vitest` |
+| Purpose | Package | Why |
+|---|---|---|
+| EVM client | `ethers` v6 | matches SomMemo; viem allowed for ABI encoding helpers only |
+| Telegram Bot API | **`grammy`** (NOT `telegraf`) | Bot API 9.6+ active; telegraf stale since Feb 2024 (only supports Bot API 7.1) |
+| IPFS storage + encryption | `@lighthouse-web3/sdk` | pay-once perpetual; built-in Kavach access control |
+| Env loading | `dotenv` | standard |
+| Logging | `pino` | structured JSON logs, fast |
+| Local store | `better-sqlite3` | fastest sync SQLite for Node; ACID; no async overhead |
+| Tests | `vitest` | ESM-native, fast |
+| ABI encoding helpers | `viem` (optional) | `encodeFunctionData`, `keccak256` — for building agent payloads |
 
-Don't introduce `viem`, `web3.js`, or alternative LLM SDKs without explicit decision.
+Don't introduce `web3.js`, `wagmi`, alternative LLM SDKs, or other Telegram libraries without explicit decision.
 
 ## Configuration
 

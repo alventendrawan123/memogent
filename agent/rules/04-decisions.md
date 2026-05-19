@@ -75,22 +75,31 @@ export function hashReasoning(input: {
 ## Submission flow
 
 ```
-1. Off-chain agent: detects trigger (Schedule fire | daily | manual)
-2. Off-chain agent: builds signals, builds prompt payload
-3. Off-chain agent: calls MemogentAgent.requestAssessment(user, payload)
-   → contract calls SomniaAgents.createRequest with payload
-   → emits AgentRequestCreated(requestId, user)
-4. Validator subcommittee executes inferNumber → callback
-5. MemogentAgent.handleResponse:
-   - decodes riskScore from responses[0].result
-   - records AgentDecisionReceipt struct
-   - emits RiskDecision(user, riskScore, riskTag, reasoningHash, requestId)
-6. MemogentCore (subscribed to RiskDecision via Reactivity) reacts:
+1. Off-chain agent: detects trigger (Schedule fire | daily heartbeat | manual)
+2. Off-chain agent: builds signals
+3. Off-chain agent: calls MemogentAgent.requestRiskAssessment(user)
+   ├─ MemogentAgent invokes JSON API agent ×2 in parallel:
+   │  - fetchUint  → wallet last-activity timestamp (Somnia explorer API)
+   │  - fetchBool  → Telegram bot health
+   ├─ MemogentAgent invokes LLM Inference agent ×2 in parallel:
+   │  - inferString with allowedValues=[SAFE,WATCH,GRACE,EXECUTE] → tag
+   │  - inferNumber bounds=[0,100] → risk score
+   └─ Each call: validator subcommittee=3, threshold=2, async callback
+4. MemogentAgent.handleResponse receives each callback:
+   - Decodes result based on pendingRequest.kind
+   - Once all 4 responses received, records AgentDecisionReceipt struct
+   - Emits RiskDecision(user, score, tag, reasoningHash, requestIds[])
+5. MemogentCore (subscribed to RiskDecision via Reactivity) reacts:
    - SAFE / WATCH → log only
    - GRACE → set graceEndsAt, emit GraceStarted
    - EXECUTE → start vault drain (via AgentVault.executeStage)
-7. Off-chain agent: listens to events, sends Telegram notifications + updates IPFS capsule
+6. [On GRACE or EXECUTE only] MemogentAgent invokes inferChat:
+   - Generates empathetic message to owner (GRACE) or beneficiary (EXECUTE)
+   - Stores message hash on-chain; full text in receipt
+7. Off-chain agent: listens to events, sends Telegram notifications, releases IPFS capsule via Lighthouse Kavach shareFile (already pre-registered at capsule-creation time)
 ```
+
+**NOTE:** We deliberately do NOT use `inferToolsChat` (experimental — zero production examples in Somnia repo). We compose `inferString` + `inferNumber` + `inferChat` instead, which are all battle-tested.
 
 ## Empathetic message generation (off-chain)
 

@@ -7,7 +7,7 @@ Hackathon judges WILL look at this. Defense-in-depth, but pragmatic for 4-week s
 ### CEI everywhere (Checks-Effects-Interactions)
 
 ```solidity
-function execute(address user) external onlyAgent {
+function execute(address user) external onlyAgent nonReentrant {
     // 1. CHECKS
     Will storage w = wills[user];
     if (!w.active || w.executed) revert Core_InvalidState();
@@ -24,9 +24,24 @@ function execute(address user) external onlyAgent {
 }
 ```
 
-### No reentrancy guard required if CEI is strict
+### Use `ReentrancyGuardTransient` (EIP-1153) — saves ~5k gas vs classic
 
-Adding `nonReentrant` is fine but adds bytes. CEI alone is sufficient when followed religiously. Audit every external call for compliance.
+```solidity
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+
+contract AgentVault is ReentrancyGuardTransient {
+    function execute(...) external nonReentrant { /* ... */ }
+}
+```
+
+Uses EIP-1153 transient storage — much cheaper than the classic `ReentrancyGuard` (no SLOAD/SSTORE on lock slot).
+
+**Verify Somnia Testnet supports EIP-1153 before committing** (Pectra+ chains do). If not supported, fall back to classic `ReentrancyGuard` — identical security, ~5k more gas per call.
+
+### Rules for applying `nonReentrant`
+
+- Apply to EVERY state-changing external function on `AgentVault` (especially `execute`, `partialRelease`, `cancelRelease`)
+- `nonReentrant` functions cannot call each other — if `execute()` needs to call `_partialRelease()`, make the internal one `private` (no modifier) and only guard the entry point
 
 ## Access control
 
@@ -54,7 +69,35 @@ Adding `nonReentrant` is fine but adds bytes. CEI alone is sufficient when follo
 
 - Use `.call{value:}("")` not `.transfer()` or `.send()` — gas stipend issues
 - Check return `bool ok`
-- For ERC20: use `SafeERC20` from OpenZeppelin if dealing with non-standard tokens. Default `IERC20.transfer` is fine for known tokens.
+
+## ERC-20 — MANDATORY `SafeERC20` + balance-delta accounting
+
+```solidity
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+using SafeERC20 for IERC20;
+```
+
+### Pattern: handle fee-on-transfer tokens (USDT-like)
+
+Memogent vaults may receive arbitrary ERC-20s. Some tokens deduct a fee on transfer — the `amount` parameter is NOT the actual delivered amount. ALWAYS use balance-delta accounting:
+
+```solidity
+function depositToken(IERC20 token, uint256 declaredAmount) external onlyActiveWill {
+    uint256 balBefore = token.balanceOf(address(this));
+    token.safeTransferFrom(msg.sender, address(this), declaredAmount);
+    uint256 actual = token.balanceOf(address(this)) - balBefore;
+    // Store ACTUAL, not declared — critical for fee-on-transfer compatibility
+    vaultTokens[msg.sender][address(token)] += actual;
+}
+```
+
+### Why mandatory
+
+Without this, an attacker can deposit a fee-on-transfer token claiming 1000 units, contract records 1000, but only ~990 land in vault. On withdrawal, vault tries to send 1000 → fails or drains other users.
+
+Skip this only if vault is hard-whitelisted to known-good tokens (USDC, DAI, WETH).
 
 ## Reactivity-specific
 
