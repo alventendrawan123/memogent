@@ -1,0 +1,20 @@
+# Foundry build artifacts
+out/
+cache/
+
+# Local environment (also in root .gitignore — explicit here)
+.env
+.env.*
+!.env.example
+
+# Test/debug artifacts
+cache/fuzz/
+cache/invariant/
+
+# Deployment dry-runs only — keep actual broadcasts committed for judge transparency
+broadcast/*/dry-run/
+
+# Local editor
+.vscode/
+.idea/
+*.swp

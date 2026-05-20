@@ -37,7 +37,6 @@ out/
 # ============================================
 sc/out/
 sc/cache/
-sc/lib/
 sc/.env
 sc/broadcast/*/dry-run/
 
