@@ -98,5 +98,60 @@ contract MemogentCoreTest is Test {
         assertEq(memogentCore.vaultSTT(owner), 1 ether);
     }
 
+    function test_SetAgentAuthority_StoresAddress() public {
+        address agent = makeAddr("agent");
+        memogentCore.setAgentAuthority(agent);
+        assertEq(memogentCore.agentAuthority(), agent);
+    }
+
+    function test_RevertWhen_NonDeployerSetsAgent() public {
+        address agent = makeAddr("agent");
+        vm.prank(hacker);
+        vm.expectRevert(bytes("Memogent: not deployer"));
+        memogentCore.setAgentAuthority(agent);
+    }
+
+    function test_RevertWhen_SetAgentTwice() public {
+        address agent = makeAddr("agent");
+        memogentCore.setAgentAuthority(agent);
+
+        address newAgent = makeAddr("newAgent");
+        vm.expectRevert(bytes("Memogent: agent already set"));
+        memogentCore.setAgentAuthority(newAgent);
+    }
+
+    function test_RevertWhen_SetAgentToZero() public {
+        vm.expectRevert(bytes("Memogent: zero address"));
+        memogentCore.setAgentAuthority(address(0));
+    }
+
+    function test_ExecuteFromAgent_RevertWhen_NotAgent() public {
+        memogentCore.registerWill(beneficiary, 30 days);
+
+        vm.expectRevert(bytes("Memogent: not agent"));
+        memogentCore.executeFromAgent(owner);
+    }
+
+    function test_ExecuteFromAgent_TriggersInheritance() public {
+        memogentCore.registerWill(beneficiary, 30 days);
+        vm.deal(owner, 10 ether);
+        memogentCore.depositSTT{value: 1 ether}();
+
+        address agent = makeAddr("agent");
+        memogentCore.setAgentAuthority(agent);
+
+        uint256 beneficiaryBefore = beneficiary.balance;
+
+        vm.prank(agent);
+        memogentCore.executeFromAgent(owner);
+
+        assertEq(beneficiary.balance, beneficiaryBefore + 1 ether);
+        assertEq(memogentCore.vaultSTT(owner), 0);
+
+        (, , , , bool executed, bool active) = memogentCore.getWillInfo(owner);
+        assertTrue(executed);
+        assertFalse(active);
+    }
+
     receive() external payable {}
 }

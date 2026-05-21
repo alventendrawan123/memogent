@@ -52,6 +52,8 @@ contract MemogentCore is ISomniaEventHandler {
     mapping(address => NFTAsset[]) public vaultNFTs;
     mapping(uint256 => address) public subscriptionIdToOwner;
     mapping(uint256 => address) public deadlineToOwner;
+    address public immutable deployer;
+    address public agentAuthority;
 
     mapping(address => CheckInRecord[]) private _checkInHistory;
     mapping(address => VaultRecord[]) private _vaultHistory;
@@ -66,6 +68,8 @@ contract MemogentCore is ISomniaEventHandler {
     event DepositNFT(address indexed owner, address indexed nftContract, uint256 tokenId);
     event Withdrawn(address indexed owner, uint256 sttAmount);
 
+    event AgentAuthoritySet(address indexed agent);
+
     modifier onlyActiveWill() {
         require(wills[msg.sender].owner != address(0), "Memogent: No will found");
         require(wills[msg.sender].active, "Memogent: Will is not active");
@@ -74,9 +78,11 @@ contract MemogentCore is ISomniaEventHandler {
     }
 
     constructor(address _precompileAddress) {
-    reactivityPrecompile = ISomniaReactivityPrecompile(_precompileAddress);
-    precompileAddress = _precompileAddress;
+        deployer = msg.sender;
+        reactivityPrecompile = ISomniaReactivityPrecompile(_precompileAddress);
+        precompileAddress = _precompileAddress;
     }
+
 
     function registerWill(
         address _beneficiary,
@@ -399,52 +405,67 @@ contract MemogentCore is ISomniaEventHandler {
         return reactivityPrecompile.subscribe(data);
     }
 
+    function setAgentAuthority(address agent) external {
+        require(msg.sender == deployer, "Memogent: not deployer");
+        require(agentAuthority == address(0), "Memogent: agent already set");
+        require(agent != address(0), "Memogent: zero address");
+        agentAuthority = agent;
+        emit AgentAuthoritySet(agent);
+    }
+
+    function executeFromAgent(address willOwner) external {
+        require(msg.sender == agentAuthority, "Memogent: not agent");
+        _executeInheritance(willOwner);
+    }
 
     function onEvent(
         uint256 subscriptionId,
         bytes32[] calldata eventTopics,
-        bytes calldata /*eventData*/)
-        external override {
-     
-            address owner = subscriptionIdToOwner[subscriptionId];
-            if (owner == address(0) && eventTopics.length > 1) {
-                uint256 deadlineKey = uint256(eventTopics[1]) / 1000 * 1000;
-                owner = deadlineToOwner[deadlineKey];
-            }
-            if (owner == address(0)) return;
+        bytes calldata /*eventData*/
+    ) external override {
+        address owner = subscriptionIdToOwner[subscriptionId];
+        if (owner == address(0) && eventTopics.length > 1) {
+            uint256 deadlineKey = uint256(eventTopics[1]) / 1000 * 1000;
+            owner = deadlineToOwner[deadlineKey];
+        }
+        if (owner == address(0)) return;
+        _executeInheritance(owner);
+    }
 
-            Will storage will = wills[owner];
-            if (!will.active || will.executed) return;
+    function _executeInheritance(address owner) internal {
+        Will storage will = wills[owner];
+        if (!will.active || will.executed) return;
 
-            will.executed = true;
-            will.active = false;
+        will.executed = true;
+        will.active = false;
 
-            address beneficiary = will.beneficiary;
+        address beneficiary = will.beneficiary;
 
-            uint256 sttAmount = vaultSTT[owner];
-            if (sttAmount > 0) {
-                vaultSTT[owner] = 0;
-                (bool sent, ) = payable(beneficiary).call{value: sttAmount}("");
-                require(sent, "Memogent: Failed to send STT");
-            }
+        uint256 sttAmount = vaultSTT[owner];
+        if (sttAmount > 0) {
+            vaultSTT[owner] = 0;
+            (bool sent, ) = payable(beneficiary).call{value: sttAmount}("");
+            require(sent, "Memogent: Failed to send STT");
+        }
 
-            uint256 tokenCount = vaultTokens[owner].length;
-            for (uint256 i = 0; i < tokenCount; i++) {
-                TokenAsset memory asset = vaultTokens[owner][i];
+        uint256 tokenCount = vaultTokens[owner].length;
+        for (uint256 i = 0; i < tokenCount; i++) {
+            TokenAsset memory asset = vaultTokens[owner][i];
             if (asset.amount > 0) {
                 IERC20(asset.tokenAddress).transfer(beneficiary, asset.amount);
-                }
             }
-            delete vaultTokens[owner];
+        }
+        delete vaultTokens[owner];
 
-            uint256 nftCount = vaultNFTs[owner].length;
-            for(uint256 i = 0; i < nftCount; i++) {
-                NFTAsset memory nft = vaultNFTs[owner][i];
-                IERC721(nft.nftContract).safeTransferFrom(address(this), beneficiary, nft.tokenId);
-            }
-            delete vaultNFTs[owner];
+        uint256 nftCount = vaultNFTs[owner].length;
+        for (uint256 i = 0; i < nftCount; i++) {
+            NFTAsset memory nft = vaultNFTs[owner][i];
+            IERC721(nft.nftContract).safeTransferFrom(address(this), beneficiary, nft.tokenId);
+        }
+        delete vaultNFTs[owner];
 
-            emit WillExecuted(owner, beneficiary, block.timestamp);
+        emit WillExecuted(owner, beneficiary, block.timestamp);
     }
+
 
 }
