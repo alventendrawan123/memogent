@@ -1,0 +1,36 @@
+{
+  "name": "memogent-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Off-chain agent for Memogent — listens to chain events, runs Telegram bot, dispatches notifications",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "issue-token": "tsx src/cli/issue-token.ts"
+  },
+  "dependencies": {
+    "@grammyjs/types": "^3.16.0",
+    "@lighthouse-web3/sdk": "^0.3.7",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0",
+    "grammy": "^1.30.0",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.2.2",
+    "siwe": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.10",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

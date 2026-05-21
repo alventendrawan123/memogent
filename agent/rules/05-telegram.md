@@ -19,37 +19,41 @@ pnpm add grammy @grammyjs/types better-sqlite3
 
 ⚠️ **Run only ONE bot instance per token** — concurrent `getUpdates` returns 409 Conflict.
 
-## SQLite schema (better-sqlite3)
+## Supabase schema (hosted PostgreSQL)
 
-Single DB at `agent/data/memogent.db`. Schema in `agent/src/store/migrations/001_init.sql`:
+**Switched from better-sqlite3 to Supabase on 2026-05-21** for these reasons:
+- Bima's FE can query same tables via `supabase-js` (with RLS), no agent HTTP API needed
+- Judges can inspect live data via Supabase dashboard during demo
+- Agent server can be ephemeral (Railway/Fly.io) — no persistent volume needed
 
-```sql
-CREATE TABLE wallet_link (
-    wallet_address TEXT PRIMARY KEY,
-    chat_id INTEGER NOT NULL UNIQUE,
-    linked_at INTEGER NOT NULL,
-    last_seen_at INTEGER NOT NULL
-);
+Schema lives in `agent/src/db/schema.sql` — copy contents into Supabase SQL Editor.
 
-CREATE TABLE link_token (
-    token TEXT PRIMARY KEY,
-    wallet_address TEXT NOT NULL,
-    nonce TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-);
+Agent uses **`service_role` key** (bypasses RLS). Bima's FE uses **`anon` key** + RLS policies (enabled in W3 when FE integrates).
 
-CREATE TABLE checkin (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    wallet_address TEXT NOT NULL,
-    sent_at INTEGER NOT NULL,
-    responded_at INTEGER,
-    response TEXT  -- 'alive' | 'busy' | NULL
-);
+⚠️ **NEVER** expose `service_role` key to FE/client. Only the server-side agent uses it.
 
-CREATE TABLE blocked_at (
-    chat_id INTEGER PRIMARY KEY,
-    blocked_at INTEGER NOT NULL
-);
+### Activity middleware MUST debounce writes
+
+Naïve `UPDATE last_seen_at` on every Telegram message → burns Supabase rate limits on chatty users. Cache last write timestamp in memory, flush only after `ACTIVITY_DEBOUNCE_MS` (default 60s) since last write per chat:
+
+```typescript
+const lastFlushAt = new Map<number, number>();
+
+bot.use(async (ctx, next) => {
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+        const now = Date.now();
+        const last = lastFlushAt.get(chatId) ?? 0;
+        if (now - last >= config.activityDebounceMs) {
+            lastFlushAt.set(chatId, now);
+            await supabase
+                .from('wallet_link')
+                .update({ last_seen_at: now })
+                .eq('chat_id', chatId);
+        }
+    }
+    await next();
+});
 ```
 
 ## Wallet linking flow (SIWE + deep link)
@@ -61,19 +65,9 @@ CREATE TABLE blocked_at (
 
 **SIWE signature MUST verify against** `walletAddress` BEFORE issuing the token. Failure → 401.
 
-## Activity middleware (drop-in)
+## Activity middleware coverage
 
-```typescript
-bot.use(async (ctx, next) => {
-    if (ctx.chat?.id) {
-        db.prepare(`UPDATE wallet_link SET last_seen_at = ? WHERE chat_id = ?`)
-          .run(Date.now(), ctx.chat.id);
-    }
-    await next();
-});
-```
-
-This single middleware covers ALL "user is alive" signals (text, photo, callback button). Don't add per-event listeners.
+The debounced middleware above covers ALL "user is alive" signals (text, photo, callback button) — they all carry `ctx.chat.id` for private chats. Don't add per-event listeners.
 
 ## Block detection
 
@@ -83,10 +77,11 @@ Two sources:
 2. **Outbound send 403 error** — catch on every `bot.api.sendMessage`
 
 ```typescript
-bot.on("my_chat_member", (ctx) => {
+bot.on("my_chat_member", async (ctx) => {
     if (ctx.myChatMember.new_chat_member.status === "kicked") {
-        db.prepare(`INSERT OR REPLACE INTO blocked_at VALUES (?, ?)`)
-          .run(ctx.chat.id, Date.now());
+        await supabase
+            .from('blocked_chat')
+            .upsert({ chat_id: ctx.chat.id, blocked_at: Date.now() });
     }
 });
 
@@ -95,8 +90,9 @@ async function safeSend(chatId: number, text: string, opts?: any) {
         await bot.api.sendMessage(chatId, text, opts);
     } catch (err) {
         if (err instanceof GrammyError && err.error_code === 403) {
-            db.prepare(`INSERT OR REPLACE INTO blocked_at VALUES (?, ?)`)
-              .run(chatId, Date.now());
+            await supabase
+                .from('blocked_chat')
+                .upsert({ chat_id: chatId, blocked_at: Date.now() });
             logger.warn({ chatId }, "user blocked the bot");
         } else throw err;
     }

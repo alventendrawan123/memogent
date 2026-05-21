@@ -1,0 +1,25 @@
+node_modules/
+dist/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+*.tsbuildinfo
+
+# Runtime data — logs etc
+data/
+
+# Logs
+logs/
+*.log
+
+# tsx cache
+.tsx-cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
