@@ -12,3 +12,15 @@ export const MEMOGENT_CORE_EVENTS = [
   'event WillExecuted(address indexed owner, address indexed beneficiary, uint256 executedAt)',
   'event AgentAuthoritySet(address indexed agent)',
 ] as const;
+
+export const TIME_CAPSULE_EVENTS = [
+  'event CapsuleAttached(address indexed owner, address indexed beneficiary, string cid, bytes32 contentHash)',
+  'event CapsuleUpdated(address indexed owner, string oldCid, string newCid)',
+  'event CapsuleRemoved(address indexed owner, string cid)',
+] as const;
+
+export const TIME_CAPSULE_VIEW = [
+  'function getCapsule(address owner) external view returns (string cid, bytes32 contentHash, uint256 attachedAt)',
+  'function hasCapsule(address owner) external view returns (bool)',
+  'function isReleased(address owner) external view returns (bool)',
+] as const;

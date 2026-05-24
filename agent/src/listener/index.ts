@@ -1,12 +1,13 @@
 import { Contract, JsonRpcProvider, type ContractEventPayload } from 'ethers';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { MEMOGENT_AGENT_EVENTS, MEMOGENT_CORE_EVENTS } from './abi.js';
+import { MEMOGENT_AGENT_EVENTS, MEMOGENT_CORE_EVENTS, TIME_CAPSULE_EVENTS } from './abi.js';
 import {
   onAssessmentRequested,
   onRiskDecision,
   onExecutionTriggered,
   onWillExecuted,
+  onCapsuleAttached,
 } from './handlers.js';
 
 export type Listener = {
@@ -27,11 +28,18 @@ export function createListener(): Listener | null {
 
   const agentContract = new Contract(config.contracts.agent, [...MEMOGENT_AGENT_EVENTS], provider);
   const coreContract = new Contract(config.contracts.core, [...MEMOGENT_CORE_EVENTS], provider);
+  const capsuleContract = config.contracts.capsule
+    ? new Contract(config.contracts.capsule, [...TIME_CAPSULE_EVENTS], provider)
+    : null;
 
   return {
     async start() {
       logger.info(
-        { core: config.contracts.core, agent: config.contracts.agent },
+        {
+          core: config.contracts.core,
+          agent: config.contracts.agent,
+          capsule: config.contracts.capsule || '(disabled)',
+        },
         'Starting event listener'
       );
 
@@ -77,6 +85,20 @@ export function createListener(): Listener | null {
         });
       });
 
+      if (capsuleContract) {
+        await capsuleContract.on('CapsuleAttached', async (owner, beneficiary, cid, contentHash, eventArg) => {
+          const evt = eventArg as ContractEventPayload;
+          await onCapsuleAttached({
+            owner,
+            beneficiary,
+            cid,
+            contentHash,
+            txHash: evt.log.transactionHash,
+            blockNumber: evt.log.blockNumber,
+          });
+        });
+      }
+
       const currentBlock = await provider.getBlockNumber();
       logger.info({ currentBlock }, 'Listener subscribed to events');
     },
@@ -85,6 +107,7 @@ export function createListener(): Listener | null {
       logger.info('Stopping listener');
       await agentContract.removeAllListeners();
       await coreContract.removeAllListeners();
+      if (capsuleContract) await capsuleContract.removeAllListeners();
       provider.destroy();
     },
   };

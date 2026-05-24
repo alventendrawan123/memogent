@@ -35,6 +35,7 @@ export const config = {
   contracts: {
     core: optional('MEMOGENT_CORE_ADDRESS', ''),
     agent: optional('MEMOGENT_AGENT_ADDRESS', ''),
+    capsule: optional('TIME_CAPSULE_ADDRESS', ''),
   },
   servicePrivateKey: optional('SERVICE_PRIVATE_KEY', ''),
   telegram: {
@@ -44,8 +45,8 @@ export const config = {
     url: required('SUPABASE_URL'),
     serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
   },
-  lighthouse: {
-    apiKey: optional('LIGHTHOUSE_API_KEY', ''),
+  pinata: {
+    jwt: optional('PINATA_JWT', ''),
   },
   logLevel: optional('LOG_LEVEL', 'info') as 'trace' | 'debug' | 'info' | 'warn' | 'error',
   activityDebounceMs: parseInt(optional('ACTIVITY_DEBOUNCE_MS', '60000'), 10),

@@ -45,7 +45,8 @@ export async function notifyRiskDecision(
 
 export async function notifyWillExecuted(
   ownerAddress: string,
-  beneficiaryAddress: string
+  beneficiaryAddress: string,
+  capsuleCid?: string
 ): Promise<void> {
   const ownerLink = await walletLink.getByWallet(ownerAddress);
   if (ownerLink) {
@@ -59,17 +60,22 @@ export async function notifyWillExecuted(
   const bnfLink = await walletLink.getByWallet(beneficiaryAddress);
   if (bnfLink) {
     const shortOwner = `${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`;
-    await safeSend(
-      bnfLink.chat_id,
+    let msg =
       `You have been named beneficiary by ${shortOwner}. ` +
-        `Their digital inheritance has been transferred to your wallet. ` +
-        `Check your wallet on the Somnia explorer for received assets.`
-    );
+      `Their digital inheritance has been transferred to your wallet. ` +
+      `Check your wallet on the Somnia explorer for received assets.`;
+    if (capsuleCid) {
+      msg +=
+        `\n\n🕯️ A Time Capsule has been left for you. ` +
+        `Run \`pnpm capsule-claim ${shortOwner}\` to decrypt the final message.\n` +
+        `IPFS CID: \`${capsuleCid}\``;
+    }
+    await safeSend(bnfLink.chat_id, msg);
   }
 
   if (!ownerLink && !bnfLink) {
     logger.info(
-      { ownerAddress, beneficiaryAddress },
+      { ownerAddress, beneficiaryAddress, capsuleCid },
       'WillExecuted: neither party linked to Telegram'
     );
   }

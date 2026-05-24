@@ -1,7 +1,30 @@
 import { logger } from '../logger.js';
 import { notifyRiskDecision, notifyWillExecuted, type RiskClassification } from '../telegram/dispatcher.js';
+import { fetchCapsule } from './capsuleClient.js';
 
 export type { RiskClassification };
+
+export type CapsuleAttachedEvent = {
+  owner: string;
+  beneficiary: string;
+  cid: string;
+  contentHash: string;
+  txHash: string;
+  blockNumber: number;
+};
+
+export async function onCapsuleAttached(event: CapsuleAttachedEvent): Promise<void> {
+  logger.info(
+    {
+      owner: event.owner,
+      beneficiary: event.beneficiary,
+      cid: event.cid,
+      tx: event.txHash,
+      block: event.blockNumber,
+    },
+    'Capsule attached'
+  );
+}
 
 export type AssessmentRequestedEvent = {
   requestId: bigint;
@@ -71,6 +94,7 @@ export async function onExecutionTriggered(event: ExecutionTriggeredEvent): Prom
 }
 
 export async function onWillExecuted(event: WillExecutedEvent): Promise<void> {
+  const capsule = await fetchCapsule(event.owner);
   logger.warn(
     {
       owner: event.owner,
@@ -78,8 +102,9 @@ export async function onWillExecuted(event: WillExecutedEvent): Promise<void> {
       executedAt: new Date(Number(event.executedAt) * 1000).toISOString(),
       tx: event.txHash,
       block: event.blockNumber,
+      capsuleCid: capsule?.cid ?? null,
     },
     'Will EXECUTED — assets transferred to beneficiary'
   );
-  await notifyWillExecuted(event.owner, event.beneficiary);
+  await notifyWillExecuted(event.owner, event.beneficiary, capsule?.cid);
 }
