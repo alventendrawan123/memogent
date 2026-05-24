@@ -9,6 +9,7 @@ import {
   onWillExecuted,
   onWillRegistered,
   onCapsuleAttached,
+  onEmpathyMessageGenerated,
 } from './handlers.js';
 
 export type Listener = {
@@ -68,6 +69,16 @@ export function createListener(): Listener | null {
         const evt = eventArg as ContractEventPayload;
         await onExecutionTriggered({
           user,
+          txHash: evt.log.transactionHash,
+          blockNumber: evt.log.blockNumber,
+        });
+      });
+
+      await agentContract.on('EmpathyMessageGenerated', async (user, message, eventArg) => {
+        const evt = eventArg as ContractEventPayload;
+        await onEmpathyMessageGenerated({
+          user,
+          message,
           txHash: evt.log.transactionHash,
           blockNumber: evt.log.blockNumber,
         });

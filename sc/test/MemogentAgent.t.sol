@@ -183,5 +183,58 @@ contract MemogentAgentTest is Test {
         assertEq(beneficiary.balance, beneficiaryBalBefore + 1 ether);
     }
 
+    function test_GenerateEmpathy_RevertWhen_ZeroUser() public {
+        vm.expectRevert("MemogentAgent: zero user");
+        agent.generateEmpathyMessage{value: LLM_DEPOSIT}(address(0));
+    }
+
+    function test_GenerateEmpathy_RevertWhen_NoWill() public {
+        vm.expectRevert("MemogentAgent: no will");
+        agent.generateEmpathyMessage{value: LLM_DEPOSIT}(stranger);
+    }
+
+    function test_GenerateEmpathy_RevertWhen_NotExecuted() public {
+        vm.expectRevert("MemogentAgent: will not yet executed");
+        agent.generateEmpathyMessage{value: LLM_DEPOSIT}(user);
+    }
+
+    function test_GenerateEmpathy_DispatchesAfterExecution() public {
+        vm.prank(user);
+        core.depositSTT{value: 1 ether}();
+        uint256 assessReq = agent.assessRisk{value: LLM_DEPOSIT}(user);
+        mockPlatform.triggerCallback(assessReq, "EXECUTE", ResponseStatus.Success);
+
+        uint256 empathyReq = agent.generateEmpathyMessage{value: LLM_DEPOSIT}(user);
+        assertEq(empathyReq, 2);
+        assertEq(agent.pendingEmpathy(empathyReq), user);
+    }
+
+    function test_HandleResponse_Empathy_StoresMessage() public {
+        vm.prank(user);
+        core.depositSTT{value: 1 ether}();
+        uint256 assessReq = agent.assessRisk{value: LLM_DEPOSIT}(user);
+        mockPlatform.triggerCallback(assessReq, "EXECUTE", ResponseStatus.Success);
+
+        uint256 empathyReq = agent.generateEmpathyMessage{value: LLM_DEPOSIT}(user);
+        string memory genMsg = "I am sorry I could not reach you in person. Thank you for being my person. Take care of yourself.";
+        mockPlatform.triggerCallback(empathyReq, genMsg, ResponseStatus.Success);
+
+        assertEq(agent.empathyMessages(user), genMsg);
+        assertEq(agent.pendingEmpathy(empathyReq), address(0));
+    }
+
+    function test_GenerateEmpathy_RevertWhen_AlreadyGenerated() public {
+        vm.prank(user);
+        core.depositSTT{value: 1 ether}();
+        uint256 assessReq = agent.assessRisk{value: LLM_DEPOSIT}(user);
+        mockPlatform.triggerCallback(assessReq, "EXECUTE", ResponseStatus.Success);
+
+        uint256 empathyReq = agent.generateEmpathyMessage{value: LLM_DEPOSIT}(user);
+        mockPlatform.triggerCallback(empathyReq, "some message", ResponseStatus.Success);
+
+        vm.expectRevert("MemogentAgent: message already generated");
+        agent.generateEmpathyMessage{value: LLM_DEPOSIT}(user);
+    }
+
     receive() external payable {}
 }

@@ -1,7 +1,8 @@
 import { logger } from '../logger.js';
-import { notifyRiskDecision, notifyWillExecuted, type RiskClassification } from '../telegram/dispatcher.js';
+import { notifyRiskDecision, notifyWillExecuted, notifyEmpathyMessage, type RiskClassification } from '../telegram/dispatcher.js';
 import { fetchCapsule } from './capsuleClient.js';
 import { trackedWill } from '../db/repos/index.js';
+import { dispatchGenerateEmpathy } from '../dispatcher/agentWriter.js';
 
 export type { RiskClassification };
 
@@ -160,4 +161,30 @@ export async function onWillExecuted(event: WillExecutedEvent): Promise<void> {
     logger.warn({ owner: event.owner, err }, 'markExecuted failed');
   }
   await notifyWillExecuted(event.owner, event.beneficiary, capsule?.cid);
+
+  logger.info({ owner: event.owner }, 'Triggering AI empathy message generation');
+  void dispatchGenerateEmpathy(event.owner).catch((err: unknown) => {
+    logger.warn({ owner: event.owner, err }, 'dispatchGenerateEmpathy failed (will retry on next WillExecuted if any)');
+  });
+}
+
+export type EmpathyMessageGeneratedEvent = {
+  user: string;
+  message: string;
+  txHash: string;
+  blockNumber: number;
+};
+
+export async function onEmpathyMessageGenerated(event: EmpathyMessageGeneratedEvent): Promise<void> {
+  logger.warn(
+    {
+      user: event.user,
+      messageLength: event.message.length,
+      preview: event.message.slice(0, 80),
+      tx: event.txHash,
+      block: event.blockNumber,
+    },
+    'AI Empathy Message generated — forwarding to beneficiary'
+  );
+  await notifyEmpathyMessage(event.user, event.message);
 }

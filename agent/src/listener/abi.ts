@@ -4,6 +4,9 @@ export const MEMOGENT_AGENT_EVENTS = [
   'event RiskDecision(address indexed user, string classification, uint256 timestamp)',
   'event ExecutionTriggered(address indexed user)',
   'event AssessmentFailed(uint256 indexed requestId, address indexed user, uint8 status)',
+  'event EmpathyMessageRequested(uint256 indexed requestId, address indexed user, uint256 deposit)',
+  'event EmpathyMessageGenerated(address indexed user, string message)',
+  'event EmpathyMessageFailed(uint256 indexed requestId, address indexed user, uint8 status)',
 ] as const;
 
 export const MEMOGENT_CORE_EVENTS = [

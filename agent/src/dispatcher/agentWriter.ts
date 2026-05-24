@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 const AGENT_WRITE_ABI = [
   'function assessRisk(address user) external payable returns (uint256)',
   'function assessRiskWithContext(address user, string calldata extraSignals) external payable returns (uint256)',
+  'function generateEmpathyMessage(address user) external payable returns (uint256)',
 ];
 
 const ASSESS_DEPOSIT_WEI = parseEther('0.4');
@@ -69,6 +70,27 @@ export async function dispatchAssessRiskWithContext(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ user, context: contextString, error: msg }, 'dispatchAssessRiskWithContext failed');
+    return null;
+  }
+}
+
+export async function dispatchGenerateEmpathy(user: string): Promise<string | null> {
+  const contract = getContract();
+  if (!contract) {
+    logger.warn({ user }, 'agentWriter: contract not configured');
+    return null;
+  }
+  try {
+    const fn = contract.getFunction('generateEmpathyMessage');
+    const tx = await fn(user, {
+      value: ASSESS_DEPOSIT_WEI,
+      gasLimit: ASSESS_GAS_LIMIT,
+    });
+    logger.info({ user, tx: tx.hash, depositSTT: 0.4 }, 'dispatchGenerateEmpathy: tx sent');
+    return tx.hash;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn({ user, error: msg }, 'dispatchGenerateEmpathy failed');
     return null;
   }
 }

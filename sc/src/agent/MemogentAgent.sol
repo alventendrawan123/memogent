@@ -39,6 +39,16 @@ contract MemogentAgent is IAgentCallback {
     mapping(address => RiskAssessment) public latestAssessment;
     mapping(address => uint256) public lastAssessmentRequestAt;
 
+    mapping(uint256 => address) public pendingEmpathy;
+    mapping(address => string) public empathyMessages;
+
+    string public constant EMPATHY_SYSTEM_PROMPT =
+        "You are writing a brief final farewell in the voice of a person whose digital will just executed automatically. "
+        "The person has gone inactive for an extended period and the inheritance has transferred to their named beneficiary. "
+        "Write 2 to 4 short, warm, sincere sentences directly addressing the beneficiary. "
+        "Do not be melodramatic. Sound natural, like a hastily-written note. "
+        "Do not include placeholders, names, or addresses. Use 'I' and 'you'. Avoid cliches.";
+
     event AssessmentRequested(uint256 indexed requestId, address indexed user, uint256 deposit);
     event AssessmentRequestedWithContext(uint256 indexed requestId, address indexed user, string contextSummary);
     event AssessmentReceived(uint256 indexed requestId, address indexed user, string classification);
@@ -46,6 +56,10 @@ contract MemogentAgent is IAgentCallback {
     event ExecutionTriggered(address indexed user);
     event ExecutionRejectedByCore(address indexed user, string reason);
     event AssessmentFailed(uint256 indexed requestId, address indexed user, ResponseStatus status);
+
+    event EmpathyMessageRequested(uint256 indexed requestId, address indexed user, uint256 deposit);
+    event EmpathyMessageGenerated(address indexed user, string message);
+    event EmpathyMessageFailed(uint256 indexed requestId, address indexed user, ResponseStatus status);
 
     constructor(address _platform, address _core) {
         require(_platform != address(0), "MemogentAgent: zero platform");
@@ -129,6 +143,12 @@ contract MemogentAgent is IAgentCallback {
     ) external override {
         require(msg.sender == address(platform), "MemogentAgent: not platform");
 
+        address empathyUser = pendingEmpathy[requestId];
+        if (empathyUser != address(0)) {
+            _handleEmpathyResponse(requestId, empathyUser, responses, status);
+            return;
+        }
+
         PendingAssessment memory pending = pendingAssessments[requestId];
         require(pending.user != address(0), "MemogentAgent: unknown request");
         delete pendingAssessments[requestId];
@@ -158,6 +178,67 @@ contract MemogentAgent is IAgentCallback {
             } catch {
                 emit ExecutionRejectedByCore(pending.user, "core rejected (no reason)");
             }
+        }
+    }
+
+    function _handleEmpathyResponse(
+        uint256 requestId,
+        address user,
+        Response[] memory responses,
+        ResponseStatus status
+    ) internal {
+        delete pendingEmpathy[requestId];
+
+        if (status != ResponseStatus.Success || responses.length == 0) {
+            emit EmpathyMessageFailed(requestId, user, status);
+            return;
+        }
+
+        string memory message = abi.decode(responses[0].result, (string));
+        empathyMessages[user] = message;
+        emit EmpathyMessageGenerated(user, message);
+    }
+
+    function generateEmpathyMessage(address user) external payable returns (uint256 requestId) {
+        require(user != address(0), "MemogentAgent: zero user");
+
+        (address owner, , , , bool executed, ) = core.getWillInfo(user);
+        require(owner != address(0), "MemogentAgent: no will");
+        require(executed, "MemogentAgent: will not yet executed");
+        require(bytes(empathyMessages[user]).length == 0, "MemogentAgent: message already generated");
+
+        string[] memory roles = new string[](2);
+        roles[0] = "system";
+        roles[1] = "user";
+
+        string[] memory messages = new string[](2);
+        messages[0] = EMPATHY_SYSTEM_PROMPT;
+        messages[1] = "Write the farewell note now. Address the beneficiary as 'you'. Keep it brief.";
+
+        bytes memory payload = abi.encodeWithSelector(
+            ILLMAgent.inferChat.selector,
+            roles,
+            messages,
+            false
+        );
+
+        uint256 deposit = _calculateLLMDeposit();
+        require(msg.value >= deposit, "MemogentAgent: insufficient deposit");
+
+        requestId = platform.createRequest{value: deposit}(
+            SomniaAgentConstants.LLM_AGENT_ID,
+            address(this),
+            IAgentCallback.handleResponse.selector,
+            payload
+        );
+
+        pendingEmpathy[requestId] = user;
+        emit EmpathyMessageRequested(requestId, user, deposit);
+
+        uint256 excess = msg.value - deposit;
+        if (excess > 0) {
+            (bool sent, ) = payable(msg.sender).call{value: excess}("");
+            require(sent, "MemogentAgent: refund failed");
         }
     }
 
