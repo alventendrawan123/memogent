@@ -15,12 +15,12 @@ contract MemogentAgent is IAgentCallback {
 
     string public constant SYSTEM_PROMPT =
         "You are a risk classifier for an autonomous digital inheritance system. "
-        "Given the wallet inactivity signal, classify the risk into exactly one of: "
+        "Given the wallet inactivity signal and any extra signals provided, classify the risk into exactly one of: "
         "SAFE (low risk, recent activity), "
         "WATCH (mild inactivity, monitor closely), "
         "GRACE (moderate inactivity, send warning to user), "
         "EXECUTE (critical inactivity, trigger inheritance). "
-        "Respond with exactly one word from the allowed values.";
+        "Weigh ALL signals together. Respond with exactly one word from the allowed values.";
 
     uint256 public constant ASSESSMENT_COOLDOWN = 1 hours;
 
@@ -40,9 +40,11 @@ contract MemogentAgent is IAgentCallback {
     mapping(address => uint256) public lastAssessmentRequestAt;
 
     event AssessmentRequested(uint256 indexed requestId, address indexed user, uint256 deposit);
+    event AssessmentRequestedWithContext(uint256 indexed requestId, address indexed user, string contextSummary);
     event AssessmentReceived(uint256 indexed requestId, address indexed user, string classification);
     event RiskDecision(address indexed user, string classification, uint256 timestamp);
     event ExecutionTriggered(address indexed user);
+    event ExecutionRejectedByCore(address indexed user, string reason);
     event AssessmentFailed(uint256 indexed requestId, address indexed user, ResponseStatus status);
 
     constructor(address _platform, address _core) {
@@ -55,6 +57,17 @@ contract MemogentAgent is IAgentCallback {
     }
 
     function assessRisk(address user) external payable returns (uint256 requestId) {
+        return _dispatchAssess(user, "");
+    }
+
+    function assessRiskWithContext(
+        address user,
+        string calldata extraSignals
+    ) external payable returns (uint256 requestId) {
+        return _dispatchAssess(user, extraSignals);
+    }
+
+    function _dispatchAssess(address user, string memory extraSignals) internal returns (uint256 requestId) {
         require(user != address(0), "MemogentAgent: zero user");
         uint256 lastRequest = lastAssessmentRequestAt[user];
         if (lastRequest != 0) {
@@ -65,7 +78,7 @@ contract MemogentAgent is IAgentCallback {
         }
         lastAssessmentRequestAt[user] = block.timestamp;
 
-        string memory prompt = _buildPrompt(user);
+        string memory prompt = _buildPrompt(user, extraSignals);
 
         string[] memory allowedValues = new string[](4);
         allowedValues[0] = "SAFE";
@@ -97,6 +110,9 @@ contract MemogentAgent is IAgentCallback {
         });
 
         emit AssessmentRequested(requestId, user, deposit);
+        if (bytes(extraSignals).length > 0) {
+            emit AssessmentRequestedWithContext(requestId, user, extraSignals);
+        }
 
         uint256 excess = msg.value - deposit;
         if (excess > 0) {
@@ -135,7 +151,13 @@ contract MemogentAgent is IAgentCallback {
 
         if (keccak256(bytes(classification)) == keccak256(bytes("EXECUTE"))) {
             emit ExecutionTriggered(pending.user);
-            core.executeFromAgent(pending.user);
+            try core.executeFromAgent(pending.user) {
+                // success
+            } catch Error(string memory reason) {
+                emit ExecutionRejectedByCore(pending.user, reason);
+            } catch {
+                emit ExecutionRejectedByCore(pending.user, "core rejected (no reason)");
+            }
         }
     }
 
@@ -146,7 +168,7 @@ contract MemogentAgent is IAgentCallback {
         return floor + perAgentTotal + buffer;
     }
 
-    function _buildPrompt(address user) internal view returns (string memory) {
+    function _buildPrompt(address user, string memory extraSignals) internal view returns (string memory) {
         (address owner, , uint256 lastCheckIn, uint256 inactivePeriod, , bool executed, bool active, ) = core.wills(user);
         require(owner != address(0), "MemogentAgent: no will");
         require(active, "MemogentAgent: will inactive");
@@ -156,11 +178,16 @@ contract MemogentAgent is IAgentCallback {
         uint256 percent = inactivePeriod == 0 ? 0 : (elapsed * 100) / inactivePeriod;
         if (percent > 100) percent = 100;
 
-        return string.concat(
-            "Wallet inactivity: ",
+        string memory base = string.concat(
+            "On-chain checkIn inactivity: ",
             _uintToString(percent),
-            " percent of inactive-period threshold elapsed. Classify the inheritance risk."
+            " percent of threshold elapsed."
         );
+
+        if (bytes(extraSignals).length > 0) {
+            return string.concat(base, " Off-chain signals: ", extraSignals, ". Classify the inheritance risk.");
+        }
+        return string.concat(base, " Classify the inheritance risk.");
     }
 
     function _uintToString(uint256 value) internal pure returns (string memory) {

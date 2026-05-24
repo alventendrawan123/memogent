@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider } from 'ethers';
+import { Contract, JsonRpcProvider, Network } from 'ethers';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { TIME_CAPSULE_VIEW } from './abi.js';
@@ -16,10 +16,8 @@ function getCapsuleContract(): Contract | null {
     return null;
   }
   if (!_capsuleContract) {
-    const provider = new JsonRpcProvider(config.rpc, {
-      chainId: config.chainId,
-      name: config.network,
-    });
+    const network = new Network(config.network, config.chainId);
+    const provider = new JsonRpcProvider(config.rpc, network, { staticNetwork: network });
     _capsuleContract = new Contract(
       config.contracts.capsule,
       [...TIME_CAPSULE_VIEW],

@@ -159,5 +159,29 @@ contract MemogentAgentTest is Test {
         assertEq(pendingUser, address(0));
     }
 
+    function test_AssessRiskWithContext_DispatchesRequest() public {
+        string memory ctx = "lastTxAgeHours=2; tgLastSeenHours=1";
+        uint256 requestId = agent.assessRiskWithContext{value: LLM_DEPOSIT}(user, ctx);
+
+        assertEq(requestId, 1);
+        (address pendingUser, ) = agent.pendingAssessments(requestId);
+        assertEq(pendingUser, user);
+    }
+
+    function test_AssessRiskWithContext_FullFlow_TriggersExecute() public {
+        vm.prank(user);
+        core.depositSTT{value: 1 ether}();
+
+        string memory ctx = "lastTxAgeHours=720; tgLastSeenHours=720";
+        uint256 requestId = agent.assessRiskWithContext{value: LLM_DEPOSIT}(user, ctx);
+
+        uint256 beneficiaryBalBefore = beneficiary.balance;
+        mockPlatform.triggerCallback(requestId, "EXECUTE", ResponseStatus.Success);
+
+        (, , , , , bool executed, , ) = core.wills(user);
+        assertTrue(executed);
+        assertEq(beneficiary.balance, beneficiaryBalBefore + 1 ether);
+    }
+
     receive() external payable {}
 }

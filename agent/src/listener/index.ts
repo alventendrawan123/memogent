@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, type ContractEventPayload } from 'ethers';
+import { Contract, JsonRpcProvider, Network, type ContractEventPayload } from 'ethers';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { MEMOGENT_AGENT_EVENTS, MEMOGENT_CORE_EVENTS, TIME_CAPSULE_EVENTS } from './abi.js';
@@ -22,10 +22,8 @@ export function createListener(): Listener | null {
     return null;
   }
 
-  const provider = new JsonRpcProvider(config.rpc, {
-    chainId: config.chainId,
-    name: config.network,
-  });
+  const network = new Network(config.network, config.chainId);
+  const provider = new JsonRpcProvider(config.rpc, network, { staticNetwork: network });
 
   const agentContract = new Contract(config.contracts.agent, [...MEMOGENT_AGENT_EVENTS], provider);
   const coreContract = new Contract(config.contracts.core, [...MEMOGENT_CORE_EVENTS], provider);

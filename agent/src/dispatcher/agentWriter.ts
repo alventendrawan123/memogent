@@ -1,9 +1,10 @@
-import { Contract, JsonRpcProvider, Wallet, parseEther } from 'ethers';
+import { Contract, JsonRpcProvider, Network, Wallet, parseEther } from 'ethers';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 
 const AGENT_WRITE_ABI = [
   'function assessRisk(address user) external payable returns (uint256)',
+  'function assessRiskWithContext(address user, string calldata extraSignals) external payable returns (uint256)',
 ];
 
 const ASSESS_DEPOSIT_WEI = parseEther('0.4');
@@ -16,10 +17,8 @@ function getContract(): Contract | null {
     return null;
   }
   if (!_contract) {
-    const provider = new JsonRpcProvider(config.rpc, {
-      chainId: config.chainId,
-      name: config.network,
-    });
+    const network = new Network(config.network, config.chainId);
+    const provider = new JsonRpcProvider(config.rpc, network, { staticNetwork: network });
     const wallet = new Wallet(config.servicePrivateKey, provider);
     _contract = new Contract(config.contracts.agent, AGENT_WRITE_ABI, wallet);
   }
@@ -43,6 +42,33 @@ export async function dispatchAssessRisk(user: string): Promise<string | null> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ user, error: msg }, 'dispatchAssessRisk failed');
+    return null;
+  }
+}
+
+export async function dispatchAssessRiskWithContext(
+  user: string,
+  contextString: string
+): Promise<string | null> {
+  const contract = getContract();
+  if (!contract) {
+    logger.warn({ user }, 'agentWriter: contract not configured');
+    return null;
+  }
+  try {
+    const fn = contract.getFunction('assessRiskWithContext');
+    const tx = await fn(user, contextString, {
+      value: ASSESS_DEPOSIT_WEI,
+      gasLimit: ASSESS_GAS_LIMIT,
+    });
+    logger.info(
+      { user, tx: tx.hash, depositSTT: 0.4, context: contextString },
+      'dispatchAssessRiskWithContext: tx sent'
+    );
+    return tx.hash;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn({ user, context: contextString, error: msg }, 'dispatchAssessRiskWithContext failed');
     return null;
   }
 }

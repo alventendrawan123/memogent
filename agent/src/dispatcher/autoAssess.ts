@@ -1,6 +1,7 @@
 import { trackedWill } from '../db/repos/index.js';
 import type { TrackedWill } from '../db/types.js';
-import { dispatchAssessRisk } from './agentWriter.js';
+import { dispatchAssessRiskWithContext } from './agentWriter.js';
+import { aggregateSignals, signalsToString } from './signalAggregator.js';
 import { logger } from '../logger.js';
 
 const ASSESS_COOLDOWN_MS = 60 * 60 * 1000;
@@ -46,11 +47,18 @@ export async function autoAssessTick(): Promise<void> {
       continue;
     }
 
+    const signals = await aggregateSignals(will.owner_address);
+    const contextString = signalsToString(signals);
     logger.info(
-      { owner: will.owner_address, pct, lastClassification: will.last_classification },
-      'autoAssess: dispatching assessRisk'
+      {
+        owner: will.owner_address,
+        pct,
+        lastClassification: will.last_classification,
+        signals,
+      },
+      'autoAssess: dispatching assessRiskWithContext'
     );
-    await dispatchAssessRisk(will.owner_address);
+    await dispatchAssessRiskWithContext(will.owner_address, contextString);
   }
 }
 
