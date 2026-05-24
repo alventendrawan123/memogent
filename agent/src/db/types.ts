@@ -25,6 +25,17 @@ export type BlockedChat = {
   blocked_at: number;
 };
 
+export type TrackedWill = {
+  owner_address: string;
+  beneficiary: string;
+  registered_at_ms: number;
+  inactive_period_sec: number;
+  deadline_ms: number;
+  last_assessed_at_ms: number | null;
+  last_classification: string | null;
+  active: boolean;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -50,6 +61,12 @@ export type Database = {
         Row: BlockedChat;
         Insert: BlockedChat;
         Update: Partial<BlockedChat>;
+        Relationships: [];
+      };
+      tracked_will: {
+        Row: TrackedWill;
+        Insert: TrackedWill;
+        Update: Partial<TrackedWill>;
         Relationships: [];
       };
     };

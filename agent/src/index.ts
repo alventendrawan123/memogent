@@ -3,6 +3,7 @@ import { logger } from './logger.js';
 import { supabase } from './db/supabase.js';
 import { createListener } from './listener/index.js';
 import { createTelegramService } from './telegram/index.js';
+import { createDispatcher } from './dispatcher/index.js';
 
 async function main(): Promise<void> {
   logger.info(
@@ -33,8 +34,14 @@ async function main(): Promise<void> {
     await telegram.start();
   }
 
+  const dispatcher = createDispatcher();
+  if (dispatcher) {
+    dispatcher.start();
+  }
+
   process.on('SIGINT', async () => {
     logger.info('SIGINT received, shutting down');
+    if (dispatcher) dispatcher.stop();
     if (listener) await listener.stop();
     if (telegram) await telegram.stop();
     process.exit(0);
@@ -42,6 +49,7 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down');
+    if (dispatcher) dispatcher.stop();
     if (listener) await listener.stop();
     if (telegram) await telegram.stop();
     process.exit(0);

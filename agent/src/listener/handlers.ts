@@ -1,8 +1,46 @@
 import { logger } from '../logger.js';
 import { notifyRiskDecision, notifyWillExecuted, type RiskClassification } from '../telegram/dispatcher.js';
 import { fetchCapsule } from './capsuleClient.js';
+import { trackedWill } from '../db/repos/index.js';
 
 export type { RiskClassification };
+
+export type WillRegisteredEvent = {
+  owner: string;
+  beneficiary: string;
+  deadlineMs: bigint;
+  txHash: string;
+  blockNumber: number;
+};
+
+export async function onWillRegistered(event: WillRegisteredEvent): Promise<void> {
+  const deadlineMs = Number(event.deadlineMs);
+  const registeredAtMs = Date.now();
+  const inactivePeriodSec = Math.floor((deadlineMs - registeredAtMs) / 1000);
+
+  await trackedWill.upsert({
+    owner_address: event.owner,
+    beneficiary: event.beneficiary,
+    registered_at_ms: registeredAtMs,
+    inactive_period_sec: Math.max(inactivePeriodSec, 60),
+    deadline_ms: deadlineMs,
+    last_assessed_at_ms: null,
+    last_classification: null,
+    active: true,
+  });
+
+  logger.info(
+    {
+      owner: event.owner,
+      beneficiary: event.beneficiary,
+      deadlineMs,
+      inactivePeriodSec,
+      tx: event.txHash,
+      block: event.blockNumber,
+    },
+    'Will registered — tracked for autonomous assessment'
+  );
+}
 
 export type CapsuleAttachedEvent = {
   owner: string;
@@ -67,6 +105,11 @@ export async function onAssessmentRequested(event: AssessmentRequestedEvent): Pr
     },
     'Assessment requested'
   );
+  try {
+    await trackedWill.recordAssessment(event.user, null, Date.now());
+  } catch (err) {
+    logger.warn({ user: event.user, err }, 'recordAssessment failed (will may not be tracked)');
+  }
 }
 
 export async function onRiskDecision(event: RiskDecisionEvent): Promise<void> {
@@ -79,6 +122,11 @@ export async function onRiskDecision(event: RiskDecisionEvent): Promise<void> {
     },
     'Risk decision received'
   );
+  try {
+    await trackedWill.recordAssessment(event.user, event.classification, Date.now());
+  } catch (err) {
+    logger.warn({ user: event.user, err }, 'recordAssessment (decision) failed');
+  }
   await notifyRiskDecision(event.user, event.classification);
 }
 
@@ -106,5 +154,10 @@ export async function onWillExecuted(event: WillExecutedEvent): Promise<void> {
     },
     'Will EXECUTED — assets transferred to beneficiary'
   );
+  try {
+    await trackedWill.markExecuted(event.owner);
+  } catch (err) {
+    logger.warn({ owner: event.owner, err }, 'markExecuted failed');
+  }
   await notifyWillExecuted(event.owner, event.beneficiary, capsule?.cid);
 }

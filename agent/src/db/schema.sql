@@ -36,12 +36,29 @@ create index if not exists idx_checkin_wallet on checkin(wallet_address);
 create index if not exists idx_link_token_wallet on link_token(wallet_address);
 create index if not exists idx_link_token_expires on link_token(expires_at);
 
+-- tracked_will: dispatcher state for the autonomous assess loop. Populated by
+-- listener (WillRegistered) and updated on WillExecuted + AssessmentRequested.
+create table if not exists tracked_will (
+    owner_address       text primary key,
+    beneficiary         text not null,
+    registered_at_ms    bigint not null,
+    inactive_period_sec bigint not null,
+    deadline_ms         bigint not null,
+    last_assessed_at_ms bigint,
+    last_classification text,
+    active              boolean not null default true,
+    constraint tracked_will_addr_format check (owner_address ~ '^0x[a-fA-F0-9]{40}$')
+);
+
+create index if not exists idx_tracked_will_active on tracked_will(active);
+
 -- Grants for service_role (agent server bypasses RLS, but still needs table privileges
 -- when "Automatically expose new tables" is OFF at project creation).
 grant all on table public.wallet_link to service_role;
 grant all on table public.link_token to service_role;
 grant all on table public.checkin to service_role;
 grant all on table public.blocked_chat to service_role;
+grant all on table public.tracked_will to service_role;
 grant all on sequence public.checkin_id_seq to service_role;
 
 -- RLS (Row-Level Security) — disabled by default since agent uses service_role.

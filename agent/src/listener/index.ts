@@ -7,6 +7,7 @@ import {
   onRiskDecision,
   onExecutionTriggered,
   onWillExecuted,
+  onWillRegistered,
   onCapsuleAttached,
 } from './handlers.js';
 
@@ -69,6 +70,17 @@ export function createListener(): Listener | null {
         const evt = eventArg as ContractEventPayload;
         await onExecutionTriggered({
           user,
+          txHash: evt.log.transactionHash,
+          blockNumber: evt.log.blockNumber,
+        });
+      });
+
+      await coreContract.on('WillRegistered', async (owner, beneficiary, deadlineMs, eventArg) => {
+        const evt = eventArg as ContractEventPayload;
+        await onWillRegistered({
+          owner,
+          beneficiary,
+          deadlineMs,
           txHash: evt.log.transactionHash,
           blockNumber: evt.log.blockNumber,
         });
