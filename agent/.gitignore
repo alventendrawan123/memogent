@@ -23,3 +23,7 @@ logs/
 .vscode/
 .idea/
 *.swp
+
+# Local capsule-claim decrypt output
+capsule-decrypted.bin
+*.decrypted.bin

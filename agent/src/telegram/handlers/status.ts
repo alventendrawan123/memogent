@@ -16,14 +16,15 @@ export async function handleStatus(ctx: Context): Promise<void> {
     return;
   }
 
-  const shortAddr = `${link.wallet_address.slice(0, 6)}...${link.wallet_address.slice(-4)}`;
   const linkedDays = Math.floor((Date.now() - link.linked_at) / 86_400_000);
   const lastSeenMinutes = Math.floor((Date.now() - link.last_seen_at) / 60_000);
 
   await ctx.reply(
-    `Wallet: \`${shortAddr}\`\n` +
+    `*Linked wallet (tap to copy):*\n` +
+      `\`${link.wallet_address}\`\n\n` +
       `Linked ${linkedDays} day(s) ago\n` +
-      `Last seen ${lastSeenMinutes} minute(s) ago`,
+      `Last seen ${lastSeenMinutes} minute(s) ago\n\n` +
+      `Use \`/claimcapsule <owner_address>\` once you receive a WillExecuted DM with a Time Capsule attached.`,
     { parse_mode: 'Markdown' }
   );
 }

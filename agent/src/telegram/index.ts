@@ -5,6 +5,7 @@ import { activityMiddleware } from './middleware/activity.js';
 import { handleStart } from './handlers/start.js';
 import { handleHelp } from './handlers/help.js';
 import { handleStatus } from './handlers/status.js';
+import { handleClaimCapsule } from './handlers/claimcapsule.js';
 import * as blockedChat from '../db/repos/blockedChat.js';
 
 export type TelegramService = {
@@ -22,6 +23,7 @@ export function createTelegramService(): TelegramService | null {
   bot.command('start', handleStart);
   bot.command('help', handleHelp);
   bot.command('status', handleStatus);
+  bot.command('claimcapsule', handleClaimCapsule);
 
   bot.on('my_chat_member', async (ctx) => {
     const status = ctx.myChatMember.new_chat_member.status;

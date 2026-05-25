@@ -160,7 +160,7 @@ export async function onWillExecuted(event: WillExecutedEvent): Promise<void> {
   } catch (err) {
     logger.warn({ owner: event.owner, err }, 'markExecuted failed');
   }
-  await notifyWillExecuted(event.owner, event.beneficiary, capsule?.cid);
+  await notifyWillExecuted(event.owner, event.beneficiary, capsule?.cid, event.txHash);
 
   logger.info({ owner: event.owner }, 'Triggering AI empathy message generation');
   void dispatchGenerateEmpathy(event.owner).catch((err: unknown) => {
@@ -186,5 +186,5 @@ export async function onEmpathyMessageGenerated(event: EmpathyMessageGeneratedEv
     },
     'AI Empathy Message generated — forwarding to beneficiary'
   );
-  await notifyEmpathyMessage(event.user, event.message);
+  await notifyEmpathyMessage(event.user, event.message, event.txHash);
 }
