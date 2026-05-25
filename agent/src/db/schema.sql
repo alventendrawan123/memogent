@@ -16,7 +16,8 @@ create table if not exists link_token (
     token           text primary key,
     wallet_address  text not null,
     nonce           text not null,
-    expires_at      bigint not null
+    expires_at      bigint not null,
+    inviter_wallet  text
 );
 
 create table if not exists checkin (

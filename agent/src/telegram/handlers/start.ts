@@ -62,8 +62,30 @@ export async function handleStart(ctx: Context): Promise<void> {
   );
 
   const shortAddr = `${consumed.wallet_address.slice(0, 6)}...${consumed.wallet_address.slice(-4)}`;
-  await ctx.reply(
-    `✅ Wallet linked: \`${shortAddr}\`\n\nUse /status to check your inheritance status.`,
-    { parse_mode: 'Markdown' }
-  );
+
+  if (consumed.inviter_wallet) {
+    const shortInviter = `${consumed.inviter_wallet.slice(0, 6)}...${consumed.inviter_wallet.slice(-4)}`;
+    await ctx.reply(
+      `🎯 Welcome to Memogent!\n\n` +
+        `✅ Wallet linked: \`${shortAddr}\`\n\n` +
+        `You've been **nominated as beneficiary** by \`${shortInviter}\`.\n\n` +
+        `I'll notify you here if their digital will is ever executed, including:\n` +
+        `• 💸 Inheritance asset transfer notification\n` +
+        `• 💌 AI-generated personal farewell message\n` +
+        `• 🕯️ Time Capsule unlock instructions (if any)\n\n` +
+        `Use /status anytime to check your linked wallet.`,
+      { parse_mode: 'Markdown' }
+    );
+  } else {
+    await ctx.reply(
+      `🎯 Welcome to Memogent!\n\n` +
+        `✅ Wallet linked: \`${shortAddr}\`\n\n` +
+        `From now on, you'll receive notifications if:\n` +
+        `• A will names you as beneficiary and executes\n` +
+        `• AI risk classifier flags your wallet\n` +
+        `• A Time Capsule is unlocked for you\n\n` +
+        `Use /status to check your linked wallet anytime.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
 }

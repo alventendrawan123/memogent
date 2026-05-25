@@ -7,7 +7,8 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000;
 export async function create(
   walletAddress: string,
   nonce: string,
-  ttlMs: number = DEFAULT_TTL_MS
+  ttlMs: number = DEFAULT_TTL_MS,
+  inviterWallet?: string
 ): Promise<string> {
   const token = `link_${randomBytes(16).toString('hex')}`;
   const expiresAt = Date.now() + ttlMs;
@@ -16,6 +17,7 @@ export async function create(
     wallet_address: walletAddress,
     nonce,
     expires_at: expiresAt,
+    inviter_wallet: inviterWallet ?? null,
   });
   if (error) throw error;
   return token;

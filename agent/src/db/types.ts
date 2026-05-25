@@ -10,6 +10,7 @@ export type LinkToken = {
   wallet_address: string;
   nonce: string;
   expires_at: number;
+  inviter_wallet: string | null;
 };
 
 export type Checkin = {

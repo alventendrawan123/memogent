@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "issue-token": "tsx src/cli/issue-token.ts",
+    "invite-beneficiary": "tsx src/cli/invite-beneficiary.ts",
     "capsule-upload": "tsx src/cli/capsule-upload.ts",
     "capsule-claim": "tsx src/cli/capsule-claim.ts"
   },
