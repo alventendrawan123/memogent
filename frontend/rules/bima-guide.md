@@ -1,7 +1,7 @@
 # Frontend Guide for Bima — Memogent
 
 > Single source of truth for the Memogent frontend. Read end-to-end before writing code.
-> Updated 2026-05-25 to match the actual deployed system (commit `b18e49a`). Earlier sections about `AgentVault`, multi-stage release, Lighthouse Kavach, `AgentDecisionReceipt` struct, and `riskScore` are no longer accurate — the implementation diverged from the original plan during W3.
+> Updated 2026-05-26 — `/claimcapsule` Telegram command now lives in agent (commit `cd819f3`), DM templates polished with Shannon Explorer tx URL + full owner address tap-to-copy. This affects your beneficiary-claim scope (see §1 + §10). Earlier sections about `AgentVault`, multi-stage release, Lighthouse Kavach, `AgentDecisionReceipt` struct, and `riskScore` are no longer accurate — the implementation diverged from the original plan during W3.
 
 ---
 
@@ -33,9 +33,21 @@ Bima, **you own everything under `d:\memogent\frontend\`**. The smart-contract +
 1. **Landing + onboarding** — wallet connect, create will, deposit STT/tokens/NFT
 2. **Owner dashboard** — status, latest classification, check-in button, decision history
 3. **Telegram linking page** — SIWE signing + deep-link to `@memogent_v1_bot`
-4. **Capsule UI** — show owner if a capsule is attached; show beneficiary how to claim
-5. **Beneficiary claim page** — fetch decryption key + Pinata content + decrypt
+4. **Owner-side Capsule UI** — upload, encrypt + attach Time Capsule on chain
+5. **Beneficiary claim page (v2 trustless, optional)** — fetch decryption key + Pinata content + decrypt **client-side via the beneficiary's connected wallet**. See §10.2 for the upgrade rationale
 6. **Audit page** (optional) — public read-only view of a user's decision history
+
+**What you DON'T need to ship for v1:**
+- Beneficiary discovery / onboarding — the agent's Telegram bot already handles this (`pnpm invite-beneficiary` CLI → wallet ↔ chat link → WillExecuted DM → in-chat `/claimcapsule`). Your beneficiary claim page is a power-user / trustless alternative, not the primary path.
+
+**Two parallel beneficiary-claim paths after WillExecuted:**
+
+| Path | Built by | Trust model | Built? |
+|---|---|---|---|
+| `/claimcapsule <owner>` in Telegram | Agent | Custodial (bot sees decrypted plaintext after decrypt; never holds beneficiary PK) | ✅ shipped 2026-05-26 |
+| Web claim page (WalletConnect → sign → decrypt in browser) | Bima FE | Trustless (plaintext never leaves the beneficiary's device) | ⏳ optional v2 |
+
+Decide where you want to invest after the owner-side flow is solid. The trustless web path is the strongest demo for the "your secret never touches our server" pitch; the Telegram path is the strongest demo for "non-technical heir, zero setup."
 
 **Judging criteria that the FE directly affects:**
 - **Functionality** — must work reliably during demo
@@ -567,6 +579,24 @@ The backend route is needed because Pinata JWT must stay server-side. Reference 
 
 ### 10.2 Beneficiary side — CLAIMING
 
+**Current shipped path (Telegram, custodial v1):**
+
+After WillExecuted, the beneficiary already has a friendly DM in `@memogent_v1_bot` that includes the full owner address (tap-to-copy) and the exact command:
+
+```
+/claimcapsule 0xc13dbC4DE2E58b05641043c66F975fCDe11091A5
+```
+
+The bot then verifies eligibility on-chain, fetches the AES key via `eth_call` (spoofed `from` — view function), pulls the IPFS blob, AES-256-GCM decrypts, verifies content hash, and posts plaintext into the chat. Source: `agent/src/telegram/handlers/claimcapsule.ts`.
+
+**You do NOT need to replicate this in FE for v1.** The non-technical heir is already served end-to-end via Telegram.
+
+**Where FE adds value (v2 trustless path, optional):**
+
+The Telegram path is "custodial" only in the sense that the bot sees decrypted plaintext after the decryption step. A power user / privacy-conscious heir might prefer to never expose plaintext to any server.
+
+The FE upgrade: the beneficiary connects their wallet via RainbowKit, the page calls `getDecryptionKey` with their connected wallet as `msg.sender` (sponsored gas on view call), fetches the blob, decrypts in browser via Web Crypto, displays plaintext — and nothing is ever transmitted. Same security model as the CLI `pnpm capsule-claim`, but with a wallet-connect-friendly UX instead of an env-var-on-localhost-friendly UX.
+
 This part is fully browser-side (no API keys needed):
 
 ```tsx
@@ -656,9 +686,9 @@ export function ClaimCapsulePage({ ownerAddress }: { ownerAddress: `0x${string}`
 ```
 
 **Notes:**
-- The CID is public on-chain. Anyone can fetch the ciphertext. Only the beneficiary can fetch the key.
+- The CID is public on-chain. Anyone can fetch the ciphertext. Only the beneficiary can fetch the key via the proper access path.
 - For non-text files (images, video, PDFs), wrap the decrypted Uint8Array in a Blob with detected MIME type and create object URL for `<img>` / `<video>` / `<embed>`.
-- **MVP limitation to disclose in UI:** AES key is technically readable via `eth_getStorageAt` (raw storage slot access). Production would use Lit Protocol threshold encryption. Adequate for hackathon demo.
+- **MVP limitation to disclose in UI:** the AES key sits in plaintext contract storage. Two leaks exist: (1) `eth_getStorageAt` reads any slot; (2) `getDecryptionKey` is `external view`, and `eth_call` lets callers set `from` freely without signatures — the `msg.sender == beneficiary` check is cosmetic for view functions (it's actually what `/claimcapsule` exploits to fetch the key without holding beneficiary PK). Production fix is ECIES-wrapping the AES key with beneficiary's secp256k1 pubkey before attaching, so on-chain storage becomes ciphertext that's only useful to the holder of the beneficiary's PK. See `docs/flow.md` §9 "What's NOT built" → ECIES key wrapping (v2 roadmap). Adequate for hackathon demo.
 
 ---
 
@@ -834,7 +864,10 @@ app/
 | ✅ Done (W3) | All 4 contracts deployed + verified on Shannon Explorer |
 | ✅ Done (W3) | Off-chain agent running 24/7 — your dashboard shows real autonomous decisions |
 | ✅ Done (W3) | Supabase schema + populated tables |
-| ✅ Done (W3) | CLI tools (issue-token, capsule-upload, capsule-claim) — reference implementations |
+| ✅ Done (W3) | CLI tools (`issue-token`, `capsule-upload`, `capsule-claim`) — reference implementations |
+| ✅ Done (W4, 2026-05-25) | `pnpm invite-beneficiary <owner> <beneficiary>` — Alice-initiated link generator, solves Telegram unsolicited-DM constraint |
+| ✅ Done (W4, 2026-05-26) | `/claimcapsule <owner>` Telegram command — in-chat decrypt, no CLI needed for the heir |
+| ✅ Done (W4, 2026-05-26) | DM templates carry Shannon Explorer tx URL + full owner address (tap-to-copy) — Bima's UX feedback shipped |
 | W4 | RLS policies on Supabase for `anon` role |
 | W4 | Polished README + demo script (for Jeje) |
 
@@ -887,4 +920,4 @@ app/
 
 ---
 
-*Last updated 2026-05-25 (commit `b18e49a`). Update when new contracts deploy or when libraries pinning changes. Source of truth for FE conventions.*
+*Last updated 2026-05-26 (commit `cd819f3`). Beneficiary claim path now lives in Telegram (`/claimcapsule`) — FE beneficiary page is now optional / v2 trustless work, not a v1 must-ship. Owner-side flow (onboarding, dashboard, capsule upload, Telegram link) is still 100% your scope. Update when new contracts deploy or when libraries pinning changes. Source of truth for FE conventions.*

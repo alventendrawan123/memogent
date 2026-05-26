@@ -2,7 +2,7 @@
 
 Source of truth for what Memogent does, how the parts wire together, and what's actually deployed.
 
-> Updated 2026-05-25 after milestone `b18e49a` (security polish). Reflects live testnet deployment with full Time Capsule + AI Empathy + autonomous trigger pipeline working end-to-end.
+> Updated 2026-05-26 after commit `cd819f3` (in-Telegram `/claimcapsule` + DM template polish, full address + Shannon Explorer tx URLs). Previous milestone `b18e49a` (security polish) still applies. Reflects live testnet deployment with end-to-end Time Capsule + AI Empathy + autonomous trigger pipeline working — beneficiary can now claim the capsule entirely inside Telegram without leaving the chat.
 
 ---
 
@@ -21,6 +21,9 @@ Source of truth for what Memogent does, how the parts wire together, and what's 
 2. `checkIn()` — periodically (to push the deadline back)
 
 Everything else (assessments, classification, execution, empathy, capsule delivery) is autonomous.
+
+**Beneficiary likewise does ONE action ever:**
+- After receiving the WillExecuted DM, send `/claimcapsule <owner_address>` to the bot. The bot fetches the on-chain AES key (`eth_call` with `from: beneficiary` against the on-chain `msg.sender == beneficiary` access gate), pulls the encrypted blob from Pinata, AES-256-GCM decrypts, verifies content hash, posts plaintext into the chat. CLI fallback (`pnpm capsule-claim`) still works for power users.
 
 ---
 
@@ -306,7 +309,11 @@ Access control:
 - `removeCapsule` requires `!executed` (privacy: revoke before death)
 - `getDecryptionKey` requires `msg.sender == beneficiary` AND `executed == true`
 
-**MVP limitation documented:** The AES key is stored in contract storage. Even though `_capsules` is private and `getDecryptionKey` is gated, the storage slot is readable via `eth_getStorageAt` — a determined attacker with the CID could decrypt early. Production would use Lit Protocol custom conditions (which Lighthouse Kavach wraps) for trustless time-locked encryption.
+**MVP limitation documented:** The AES key is stored in plaintext contract storage. Even though `_capsules` is private and `getDecryptionKey` checks `msg.sender == beneficiary`, two leaks exist:
+1. Storage slot readable via `eth_getStorageAt` — anyone with the CID can decrypt early
+2. View function access control is cosmetic — `eth_call` lets the caller specify `from`, no signature required (this is actually what /claimcapsule exploits to fetch the key on the beneficiary's behalf without holding their PK)
+
+Production fix (v2 roadmap): ECIES-wrap the AES key with the beneficiary's secp256k1 pubkey before attaching. On-chain storage becomes ciphertext that is only useful to the holder of the beneficiary's PK. The `msg.sender == beneficiary` gate then becomes a UX guard, not a security boundary. Lit Protocol custom conditions / Lighthouse Kavach are alternative routes (threshold network instead of self-encryption).
 
 Events:
 - `CapsuleAttached(owner indexed, beneficiary indexed, cid, contentHash)`
@@ -327,9 +334,10 @@ agent/src/
 ├── config.ts                 single source of truth for env (validated at startup)
 ├── logger.ts                 pino + pino-pretty
 ├── cli/
-│   ├── issue-token.ts        pnpm issue-token <wallet>
-│   ├── capsule-upload.ts     pnpm capsule-upload <file>
-│   └── capsule-claim.ts      pnpm capsule-claim <owner> [output]
+│   ├── issue-token.ts          pnpm issue-token <wallet>
+│   ├── invite-beneficiary.ts   pnpm invite-beneficiary <ownerWallet> <beneficiaryWallet>
+│   ├── capsule-upload.ts       pnpm capsule-upload <file>
+│   └── capsule-claim.ts        pnpm capsule-claim <owner> [output]   (CLI fallback; /claimcapsule in Telegram is the primary UX)
 ├── db/
 │   ├── schema.sql            run once in Supabase SQL Editor
 │   ├── supabase.ts           service_role typed client
@@ -348,8 +356,9 @@ agent/src/
 └── telegram/
     ├── bot.ts                grammY Bot + safeSend wrapper
     ├── dispatcher.ts         notifyRiskDecision + notifyWillExecuted + notifyEmpathyMessage
+    │                         (DM templates carry tx URL on shannon-explorer + full owner address tap-to-copy)
     ├── middleware/activity.ts  debounced last_seen_at writes
-    ├── handlers/             /start, /help, /status
+    ├── handlers/             /start (warm welcome + capsule context), /help, /status, /claimcapsule
     └── index.ts              wire + bot.start() polling
 ```
 
@@ -414,17 +423,23 @@ Each signal degrades gracefully: missing → `null` (omitted from context) or `"
 ### 3.6 Telegram bot
 
 - Username: `@memogent_v1_bot`
-- Commands: `/start [link_<token>]`, `/help`, `/status`
+- Commands:
+  - `/start [link_<token>]` — bind wallet to chat. With inviter context (from `invite-beneficiary` CLI), the welcome explains Memogent + Time Capsule mechanics so a non-technical heir gets a complete picture.
+  - `/status` — show linked wallet (full address, tap-to-copy)
+  - `/claimcapsule <owner_address>` — unlock & decrypt Time Capsule entirely in chat. Verifies caller's chat-linked wallet matches the will's on-chain beneficiary, fetches AES key via `eth_call` (spoofed `from`), pulls IPFS blob, AES-256-GCM decrypts, verifies keccak256 content hash, posts plaintext.
+  - `/help` — protocol + capsule explanation
 - Activity middleware: debounced last_seen_at update (max 1 write per 60s per chat)
 - Block detection: `my_chat_member` event + 403 on outbound → upsert `blocked_chat`
 - `safeSend(chatId, text, opts?)`: try/catch around `bot.api.sendMessage`, marks chat as blocked on 403, logs 400 (user never started bot)
 
-Notification triggers:
+Notification triggers (every template uses full address tap-to-copy + Shannon Explorer tx URL for verifiability):
+
 | Trigger | Recipient | Message |
 |---|---|---|
 | `RiskDecision != SAFE` | linked owner | "📋/⚠️/🚨 Wallet X risk: {WATCH\|GRACE\|EXECUTE}..." |
-| `WillExecuted` | linked owner + linked beneficiary | "Your will has been executed..." / "You have been named beneficiary by..." (+ capsule CID if attached) |
-| `EmpathyMessageGenerated` | linked beneficiary | "💌 A final note from {owner}: _<message>_ (Generated by Memogent AI via Somnia LLM consensus)" |
+| `WillExecuted` (owner side) | linked owner | "📜 Your will has been executed. Assets transferred to beneficiary `<full_addr>` 🔗 https://shannon-explorer.somnia.network/tx/..." |
+| `WillExecuted` (beneficiary side) | linked beneficiary | "🚨 Inheritance triggered. Owner: `<full_owner_addr>` 🔗 tx URL 🕯️ If Time Capsule attached: run `/claimcapsule <owner_addr>` in this chat. IPFS CID: ..." |
+| `EmpathyMessageGenerated` | linked beneficiary | "💌 AI farewell from `<full_owner_addr>`: _<message>_ — Run `/claimcapsule <owner_addr>` for the owner's own message. 🔗 tx URL" |
 
 ---
 
@@ -503,20 +518,35 @@ Listener catches EmpathyMessageGenerated:
 
 ### 4.4 Beneficiary claim Time Capsule (after execution)
 
+Three paths, in order of UX quality:
+
+**Path A — `/claimcapsule` in Telegram (primary, custodial v1, shipped):**
 ```
-1. Beneficiary receives Telegram notif with CID
-2. Beneficiary runs `pnpm capsule-claim <owner-address>` from CLI, OR Bima FE provides web UI
-3. Client:
-   • cast call TimeCapsule.getCapsule(owner) → (cid, contentHash, attachedAt)
-   • cast call TimeCapsule.isReleased(owner) → true (else abort)
-   • cast call TimeCapsule.getDecryptionKey(owner)
-     → contract verifies msg.sender == beneficiary && will.executed
-     → returns AES-256 key
-   • fetch https://gateway.pinata.cloud/ipfs/{cid} → encrypted blob
-   • Decrypt locally: AES-256-GCM with key + iv (first 12 bytes) + authTag (next 16)
-   • Verify keccak256(plaintext) == contentHash
-   • Display message/file
+1. Beneficiary receives WillExecuted DM containing full owner address (tap-to-copy)
+2. Beneficiary sends to @memogent_v1_bot:
+     /claimcapsule <full_owner_address>
+3. Bot:
+   • walletLink.getByChatId(chat) → beneficiary's bound wallet
+   • core.getWillInfo(owner) → verify will.beneficiary == bound wallet AND executed
+   • capsule.getCapsule(owner) → cid, contentHash
+   • eth_call capsule.getDecryptionKey(owner) with from = beneficiary
+     (the on-chain require(msg.sender == beneficiary) passes — view calls
+     have no signature requirement, so spoofing `from` works trustlessly)
+   • fetch https://gateway.pinata.cloud/ipfs/{cid} → encrypted blob (fallback dweb.link, ipfs.io)
+   • AES-256-GCM decrypt with iv (12B) + authTag (16B) + ciphertext layout
+   • Verify keccak256(plaintext) == contentHash, post integrity flag
+   • Reply with full owner address + CID + decrypted plaintext (formatted code block, tap-to-copy)
 ```
+The bot never holds the beneficiary's PK; it never signs anything as the beneficiary. It is "custodial" only in the sense that the bot operator sees the decrypted plaintext after decryption (since it posts it to chat). For full trustlessness see Path C.
+
+**Path B — `pnpm capsule-claim` CLI (fallback, technical users):**
+```
+SERVICE_PRIVATE_KEY=<beneficiary_pk> pnpm capsule-claim <owner-address>
+```
+Same flow as Path A but signs as the actual beneficiary wallet (so the access check passes by signature, not spoofed `from`). Useful when the beneficiary doesn't trust the bot to see plaintext.
+
+**Path C — Frontend trustless claim (v2 roadmap, not yet built):**
+Bima's FE-side beneficiary page would use WalletConnect / RainbowKit to have the beneficiary sign locally, decrypt the capsule in the browser, and never expose plaintext to any server. See `frontend/rules/bima-guide.md` §10.2 for the implementation pattern.
 
 ---
 
@@ -609,6 +639,9 @@ For any Memogent inheritance execution, this chain is publicly verifiable:
 | Risk score (`inferNumber 0-100`) | NOT BUILT | Only categorical classification (`inferString`) is implemented. Score would require a second LLM call per assessment (0.30 STT extra) and visible-but-not-actionable in current UI. Categorical is sufficient for the demo |
 | Lighthouse Kavach Time Capsule | REPLACED | ISP-blocked. Pinata + AES + on-chain key gate is the working substitute |
 | Real-time Dashboard FE | Bima's domain | We provide ABIs + addresses; Bima builds the UI per `frontend/rules/bima-guide.md` |
+| Trustless FE beneficiary claim | Bima's domain (v2) | Telegram `/claimcapsule` (v1) is custodial-feeling: bot sees plaintext post-decrypt. v2 path is FE-side decrypt via WalletConnect — Bima §10.2 has the recipe |
+| ECIES key wrapping (true on-chain confidentiality) | NOT BUILT | AES key currently sits in plaintext storage. v2: wrap key with beneficiary pubkey before attaching. Solves both the `eth_getStorageAt` leak and the `eth_call` spoofed-`from` view leak documented above |
+| LI.FI cross-chain inheritance | NOT BUILT (paused) | Somnia ↔ LI.FI partnership announced 2026-05-25. Quote API integration as an AI-router tool would showcase Agent autonomy. Mainnet-only — testnet demo would be quote-and-show, not bridge-execute |
 | Multi-signature owner approval | NOT BUILT | Single-owner per will. Future work |
 | ENS resolution for beneficiary input | NOT BUILT | Use raw addresses; Bima can wrap |
 | Mainnet deploy | NOT BUILT | Hackathon scope is testnet. Mainnet would need mainnet Agent Platform address swap (`0x5E5205CF39E766118C01636bED000A54D93163E6`) |
@@ -709,4 +742,4 @@ Key Somnia primitives to call out in the video:
 
 ---
 
-*Generated 2026-05-25, reflecting commit `b18e49a` and all 5 deployed contracts. For per-contract function detail, read the source in `sc/src/`. For off-chain code, read `agent/src/`. For FE integration, read `frontend/rules/bima-guide.md`.*
+*Last updated 2026-05-26, reflecting commit `cd819f3` (in-Telegram `/claimcapsule` + DM polish) on top of `b18e49a` (security polish). All 5 deployed contracts unchanged. For per-contract function detail, read the source in `sc/src/`. For off-chain code, read `agent/src/`. For FE integration, read `frontend/rules/bima-guide.md`.*
