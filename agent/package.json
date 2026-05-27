@@ -4,6 +4,7 @@
   "private": true,
   "description": "Off-chain agent for Memogent — listens to chain events, runs Telegram bot, dispatches notifications",
   "type": "module",
+  "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
