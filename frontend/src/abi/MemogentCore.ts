@@ -1,0 +1,195 @@
+export const memogentCoreAbi = [
+  {
+    type: "function",
+    name: "registerWill",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "beneficiary", type: "address" },
+      { name: "inactivePeriodSec", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "checkIn",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "depositSTT",
+    stateMutability: "payable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "depositToken",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "depositNFT",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "nft", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "updateBeneficiary",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newBeneficiary", type: "address" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "updateInactiveperiod",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newPeriodSec", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "deactive",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "getWillInfo",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [
+      { name: "beneficiary", type: "address" },
+      { name: "lastCheckIn", type: "uint256" },
+      { name: "inactivePeriod", type: "uint256" },
+      { name: "deadlineTimestamp", type: "uint256" },
+      { name: "executed", type: "bool" },
+      { name: "active", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    name: "getStatus",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "vaultSTT",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getCheckInHistory",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "timestamp", type: "uint256" },
+          { name: "blockNumber", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "getVaultHistory",
+    stateMutability: "view",
+    inputs: [{ name: "user", type: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "actType", type: "uint8" },
+          { name: "asset", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "timestamp", type: "uint256" },
+          { name: "blockNumber", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "WillRegistered",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "beneficiary", type: "address", indexed: true },
+      { name: "deadlineMs", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "CheckedIn",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "newDeadlineMs", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "WillExecuted",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "beneficiary", type: "address", indexed: true },
+      { name: "executedAt", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "DepositSTT",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "DepositToken",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "DepositNFT",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "nftContract", type: "address", indexed: true },
+      { name: "tokenId", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+] as const;
