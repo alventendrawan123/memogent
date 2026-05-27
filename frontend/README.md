@@ -1,32 +1,36 @@
-# frontend/
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Next.js frontend for Memogent — Bima's domain. Smart contract team and AI agent team do NOT touch this directory.
+## Getting Started
 
-## Read first
+First, run the development server:
 
-**[rules/bima-guide.md](./rules/bima-guide.md)** — comprehensive end-to-end guide. Tech stack, network config, contract integration, user flows, Telegram linking (SIWE), Time Capsule upload/claim (Lighthouse Kavach), UI state mapping, security rules, coordination protocol.
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-## Layout (planned for W2-W4)
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-| Path | Purpose |
-|---|---|
-| [rules/](./rules/) | Project conventions for FE (THIS folder) |
-| `app/` | Next.js App Router pages |
-| `components/` | Shared UI components (shadcn/ui based) |
-| `lib/` | wagmi config, chains, contract helpers |
-| `abi/` | Contract ABIs synced from `sc/out/` |
-| `public/` | Static assets |
-| `package.json` | Next.js, wagmi, viem, RainbowKit, Lighthouse SDK, siwe |
-| `.env.example` | `NEXT_PUBLIC_MEMOGENT_CORE`, `NEXT_PUBLIC_LIGHTHOUSE_API_KEY`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` |
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Status
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-W1 (current): guide drafted. Scaffolding begins when Bima starts (any time).
+## Learn More
 
-See [docs/flow.md](../docs/flow.md) §13 for the specific list of read functions, events, and URLs Bima needs from the smart contract layer.
+To learn more about Next.js, take a look at the following resources:
 
-## Coordination
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-- ABI changes or new events → smart contract team pings in shared chat
-- UX questions about flow → reference `docs/flow.md` first
-- Contract bugs → file a clear repro (chain, tx hash, expected vs actual)
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
