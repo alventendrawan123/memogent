@@ -35,7 +35,10 @@ export function TypingMessages() {
     }
 
     if (phase === "pausing") {
-      const timer = setTimeout(() => setPhase("deleting"), PAUSE_BEFORE_DELETE_MS);
+      const timer = setTimeout(
+        () => setPhase("deleting"),
+        PAUSE_BEFORE_DELETE_MS,
+      );
       return () => clearTimeout(timer);
     }
 

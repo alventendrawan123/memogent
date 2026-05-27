@@ -7,7 +7,9 @@
   --font-serif: "Instrument Serif", serif;
   --font-sans: "Inter", sans-serif;
   --font-nokia: "Nokia Cellphone FC Small", monospace;
-  --font-apple: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-apple:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", system-ui, sans-serif;
 }
 
 @utility font-instrument {
