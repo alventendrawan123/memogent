@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const NAV_LINKS = [
@@ -14,8 +15,16 @@ export function Navbar() {
         <Link
           href="/"
           aria-label="Memogent home"
-          className="font-instrument text-[28px] tracking-tight text-[#1a1a1a] leading-none"
+          className="inline-flex items-center gap-2 font-instrument text-[28px] tracking-tight text-[#1a1a1a] leading-none"
         >
+          <Image
+            src="/Assets/Images/Logo-Brand/memogent-logo.png"
+            alt=""
+            width={32}
+            height={32}
+            priority
+            className="size-7"
+          />
           memogent.
         </Link>
 
@@ -40,7 +49,7 @@ export function Navbar() {
             aria-hidden
             className="absolute left-[10%] top-[1px] h-4 w-[80%] rounded-[12px] bg-gradient-to-b from-[#DEF0FC] to-transparent transition-transform duration-300 group-hover:scale-x-105"
           />
-          <span className="relative z-10">Begin</span>
+          <span className="relative z-10">Launch App</span>
         </Link>
       </nav>
     </div>

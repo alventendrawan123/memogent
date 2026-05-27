@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { WalletButton } from "./WalletButton";
 
@@ -14,8 +15,16 @@ export function MainNavbar() {
         <Link
           href="/"
           aria-label="Memogent home"
-          className="font-instrument text-[28px] tracking-tight text-[#1a1a1a] leading-none"
+          className="inline-flex items-center gap-2 font-instrument text-[28px] tracking-tight text-[#1a1a1a] leading-none"
         >
+          <Image
+            src="/Assets/Images/Logo-Brand/memogent-logo.png"
+            alt=""
+            width={32}
+            height={32}
+            priority
+            className="size-7"
+          />
           memogent.
         </Link>
 
