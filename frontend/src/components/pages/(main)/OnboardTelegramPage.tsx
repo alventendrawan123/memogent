@@ -18,7 +18,6 @@ import {
   CardTitle,
 } from "@/components/ui";
 import { TELEGRAM_BOT_URL } from "@/lib/contracts";
-import { isTelegramLinked } from "@/lib/supabase";
 import { OnboardShell } from "./_shell/OnboardShell";
 
 type LinkState =
@@ -41,9 +40,10 @@ export function OnboardTelegramPage() {
       return;
     }
     let cancelled = false;
-    isTelegramLinked(address)
-      .then((result) => {
-        if (!cancelled) setAlreadyLinked(result);
+    fetch(`/api/telegram/status?address=${address}`)
+      .then((r) => (r.ok ? r.json() : { linked: false }))
+      .then((body: { linked?: boolean }) => {
+        if (!cancelled) setAlreadyLinked(Boolean(body.linked));
       })
       .catch(() => {
         if (!cancelled) setAlreadyLinked(false);

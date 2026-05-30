@@ -16,7 +16,6 @@ import {
   Label,
 } from "@/components/ui";
 import { shortAddress } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
 import { PageHeader } from "./_shell/PageHeader";
 
 type Nomination = {
@@ -33,28 +32,22 @@ export function ClaimIndexPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!address || !supabase) {
+    if (!address) {
       setNominations(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    supabase
-      .from("tracked_will")
-      .select("owner_address, active")
-      .eq("beneficiary", address)
-      .then(({ data }) => {
+    fetch(`/api/claim/nominations?address=${address}`)
+      .then((r) => (r.ok ? r.json() : { nominations: [] }))
+      .then((body: { nominations?: Nomination[] }) => {
         if (cancelled) return;
-        const rows = (data ?? []) as Array<{
-          owner_address: string;
-          active: boolean;
-        }>;
-        setNominations(
-          rows.map((row) => ({
-            owner: row.owner_address,
-            executed: !row.active,
-          })),
-        );
+        setNominations(body.nominations ?? []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNominations([]);
         setLoading(false);
       });
     return () => {
