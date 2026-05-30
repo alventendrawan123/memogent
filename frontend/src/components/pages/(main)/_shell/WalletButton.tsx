@@ -45,7 +45,7 @@ export function WalletButton() {
 
         return (
           <Button onClick={openAccountModal} variant="secondary" size="md">
-            <span className="size-2 rounded-full bg-[#1B5E20]" aria-hidden />
+            <LuWallet className="size-4 text-[#1B5E20]" aria-hidden />
             {account.displayName}
             <LuChevronDown className="size-4 opacity-60" />
           </Button>
