@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -42,13 +43,28 @@ export function MainNavbar() {
                 <Link
                   href={link.href}
                   aria-current={active ? "page" : undefined}
-                  className={`relative inline-flex items-center rounded-full px-4 py-1.5 font-sans text-[14px] transition-colors ${
+                  className={`group relative inline-flex items-center px-3 py-1.5 font-sans text-[14px] transition-colors duration-200 ${
                     active
-                      ? "bg-[#0871E7]/10 font-medium text-[#0871E7]"
-                      : "text-[#1a1a1a] hover:bg-black/[0.04]"
+                      ? "font-medium text-[#1a1a1a]"
+                      : "text-[#1a1a1a]/45 hover:text-[#1a1a1a]/80"
                   }`}
                 >
-                  {link.label}
+                  <span className="relative">
+                    {link.label}
+                    {active ? (
+                      <motion.span
+                        layoutId="nav-active"
+                        className="absolute -bottom-1.5 left-0 right-0 h-[2px] rounded-full bg-[#1a1a1a]"
+                        transition={{
+                          type: "spring",
+                          stiffness: 400,
+                          damping: 32,
+                        }}
+                      />
+                    ) : (
+                      <span className="absolute -bottom-1.5 left-0 right-0 h-[2px] origin-left scale-x-0 rounded-full bg-[#1a1a1a]/25 transition-transform duration-200 ease-out group-hover:scale-x-100" />
+                    )}
+                  </span>
                 </Link>
               </li>
             );

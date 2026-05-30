@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LuArrowRight, LuExternalLink } from "react-icons/lu";
-import { isAddress, parseEther, parseUnits } from "viem";
+import { formatEther, isAddress, parseEther, parseUnits } from "viem";
 import {
   useAccount,
+  useBalance,
   useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -106,7 +107,25 @@ export function OnboardDepositPage() {
   );
 }
 
+const GAS_RESERVE = parseEther("0.001");
+
+function parseAmountWei(value: string): bigint | null {
+  if (!value.trim()) return null;
+  try {
+    return parseEther(value as `${number}`);
+  } catch {
+    return null;
+  }
+}
+
+function formatBalance(wei: bigint): string {
+  const value = Number(formatEther(wei));
+  if (!Number.isFinite(value)) return formatEther(wei);
+  return value.toLocaleString("en-US", { maximumFractionDigits: 4 });
+}
+
 function SttDepositForm({ onDone }: { onDone: () => void }) {
+  const { address, isConnected } = useAccount();
   const [amount, setAmount] = useState("0.5");
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isMining, isSuccess: isMined } =
@@ -114,23 +133,52 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
       hash,
     });
 
+  const { data: balance, isLoading: isBalanceLoading } = useBalance({
+    address,
+    query: { enabled: Boolean(address) },
+  });
+
   useEffect(() => {
     if (isMined) onDone();
   }, [isMined, onDone]);
 
+  const balanceValue = balance?.value ?? 0n;
+  const amountWei = parseAmountWei(amount);
+  const isPositive = amountWei !== null && amountWei > 0n;
+  const exceedsBalance = amountWei !== null && amountWei > balanceValue;
+  const leavesNoGas =
+    isPositive && !exceedsBalance && balanceValue - amountWei < GAS_RESERVE;
+
+  const validationError = !amount.trim()
+    ? null
+    : amountWei === null
+      ? "Enter a valid amount."
+      : amountWei <= 0n
+        ? "Amount must be greater than zero."
+        : exceedsBalance
+          ? `Insufficient balance — you have ${formatBalance(balanceValue)} STT.`
+          : null;
+
+  const canSubmit = isPositive && !exceedsBalance && isConnected;
+
+  const setMax = () => {
+    const max = balanceValue > GAS_RESERVE ? balanceValue - GAS_RESERVE : 0n;
+    setAmount(formatEther(max));
+  };
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    if (!canSubmit || amountWei === null) return;
     writeContract({
       address: CONTRACTS.memogentCore,
       abi: memogentCoreAbi,
       functionName: "depositSTT",
-      value: parseEther(amount),
+      value: amountWei,
     });
   };
 
   const busy = isPending || isMining;
+  const txError = friendlyTxError(error);
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
@@ -139,22 +187,56 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
         Native Somnia testnet token. Sent with the call as msg.value.
       </CardDescription>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="stt-amount">Amount (STT)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="stt-amount">Amount (STT)</Label>
+          {isConnected && (
+            <span className="font-apple text-[12px] text-[#1a1a1a]/50">
+              Balance:{" "}
+              {isBalanceLoading ? (
+                "…"
+              ) : (
+                <button
+                  type="button"
+                  onClick={setMax}
+                  className="cursor-pointer font-medium text-[#0871E7] underline-offset-2 hover:underline"
+                >
+                  {formatBalance(balanceValue)} STT
+                </button>
+              )}
+            </span>
+          )}
+        </div>
         <Input
           id="stt-amount"
           type="number"
-          step="0.01"
+          step="any"
           min={0}
+          inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          aria-invalid={Boolean(validationError)}
+          className={
+            validationError
+              ? "border-[#B91C1C]/60 focus:border-[#B91C1C] focus:ring-[#B91C1C]/20"
+              : undefined
+          }
         />
+        {validationError ? (
+          <p className="font-apple text-[12px] text-[#B91C1C]">
+            {validationError}
+          </p>
+        ) : leavesNoGas ? (
+          <p className="font-apple text-[12px] text-[#1a1a1a]/50">
+            Heads up — this leaves little STT for gas.
+          </p>
+        ) : null}
       </div>
-      {friendlyTxError(error) && (
+      {txError && (
         <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
-          {friendlyTxError(error)}
+          {txError}
         </p>
       )}
-      <Button type="submit" disabled={busy} size="lg">
+      <Button type="submit" disabled={busy || !canSubmit} size="lg">
         {isPending && "Confirm in wallet…"}
         {isMining && "Sealing on chain…"}
         {!busy && "Deposit & continue"}
@@ -244,8 +326,9 @@ function Erc20DepositForm({ onDone }: { onDone: () => void }) {
         <Input
           id="erc20-amount"
           type="number"
-          step="0.0001"
+          step="any"
           min={0}
+          inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />

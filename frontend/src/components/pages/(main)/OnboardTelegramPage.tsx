@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LuExternalLink, LuMessageCircle } from "react-icons/lu";
+import {
+  LuArrowRight,
+  LuCircleCheck,
+  LuExternalLink,
+  LuMessageCircle,
+} from "react-icons/lu";
 import { createSiweMessage } from "viem/siwe";
 import { useAccount, useSignMessage } from "wagmi";
 import {
@@ -26,6 +31,7 @@ export function OnboardTelegramPage() {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [state, setState] = useState<LinkState>({ status: "idle" });
+  const linked = state.status === "ready";
 
   const startLink = async () => {
     if (!address) return;
@@ -67,7 +73,7 @@ export function OnboardTelegramPage() {
     <OnboardShell
       stepKey="telegram"
       title="Link Telegram"
-      subtitle="Pair your wallet with our bot so the AI can ping you and so /claimcapsule works for your beneficiary. SIWE keeps it trustless."
+      subtitle="Optional but recommended — pair your wallet with our bot so the AI can ping you and so /claimcapsule works for your beneficiary. Link it now, or skip and set it up later."
     >
       <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
         <Card>
@@ -119,6 +125,13 @@ export function OnboardTelegramPage() {
                 </Link>
               )}
             </div>
+
+            {linked && (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#E8F3EA] px-3 py-2 font-apple text-[12px] text-[#1F7A3D]">
+                <LuCircleCheck className="size-4 shrink-0" />
+                Signed. Press Start in the bot tab, then continue below.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -150,9 +163,21 @@ export function OnboardTelegramPage() {
         <span className="font-apple text-[12px] uppercase tracking-[0.16em] text-[#1a1a1a]/40">
           Step 3 of 4
         </span>
-        <Button asChild size="lg">
-          <Link href="/onboard/capsule">Continue to Time Capsule</Link>
-        </Button>
+        {linked ? (
+          <Button asChild size="lg">
+            <Link href="/onboard/capsule">
+              Continue to Time Capsule <LuArrowRight className="size-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Link
+            href="/onboard/capsule"
+            className="inline-flex items-center gap-1.5 font-apple text-[13px] text-[#1a1a1a]/55 underline-offset-4 transition hover:text-[#1a1a1a] hover:underline"
+          >
+            Skip for now — link later
+            <LuArrowRight className="size-3.5" />
+          </Link>
+        )}
       </div>
     </OnboardShell>
   );
