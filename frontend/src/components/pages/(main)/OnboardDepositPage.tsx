@@ -6,10 +6,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LuArrowRight, LuChevronDown, LuExternalLink } from "react-icons/lu";
-import { formatEther, isAddress, parseEther } from "viem";
+import {
+  erc20Abi,
+  formatEther,
+  formatUnits,
+  isAddress,
+  parseEther,
+  parseUnits,
+} from "viem";
 import {
   useAccount,
   useBalance,
+  useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
@@ -24,7 +32,7 @@ import {
   Input,
   Label,
 } from "@/components/ui";
-import { CONTRACTS, TEST_TOKENS } from "@/lib/contracts";
+import { CONTRACTS, MOCK_TOKENS, TEST_TOKENS } from "@/lib/contracts";
 import { friendlyTxError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { OnboardShell } from "./_shell/OnboardShell";
@@ -42,19 +50,22 @@ const ERC20_TOKENS = [
     symbol: "BTC",
     name: "Bitcoin",
     logo: "/Assets/Images/Logo-Token/btc-logo.svg",
-    address: TEST_TOKENS.erc20Mock,
+    address: MOCK_TOKENS.btc.address,
+    decimals: MOCK_TOKENS.btc.decimals,
   },
   {
     symbol: "USDC",
     name: "USD Coin",
     logo: "/Assets/Images/Logo-Token/usdc-logo.svg",
-    address: TEST_TOKENS.erc20Mock,
+    address: MOCK_TOKENS.usdc.address,
+    decimals: MOCK_TOKENS.usdc.decimals,
   },
   {
     symbol: "USDT",
     name: "Tether",
     logo: "/Assets/Images/Logo-Token/usdt-logo.svg",
-    address: TEST_TOKENS.erc20Mock,
+    address: MOCK_TOKENS.usdt.address,
+    decimals: MOCK_TOKENS.usdt.decimals,
   },
 ] as const;
 
@@ -98,7 +109,9 @@ export function OnboardDepositPage() {
                 />
               </Tabs.Content>
               <Tabs.Content value="erc20">
-                <Erc20DepositForm />
+                <Erc20DepositForm
+                  onDone={() => router.push("/onboard/telegram")}
+                />
               </Tabs.Content>
               <Tabs.Content value="nft">
                 <NftDepositForm
@@ -359,23 +372,136 @@ function TokenSelect({
   );
 }
 
-function Erc20DepositForm() {
+function Erc20DepositForm({ onDone }: { onDone: () => void }) {
+  const { address, isConnected } = useAccount();
   const [token, setToken] = useState<Erc20Token>(ERC20_TOKENS[0]);
   const [amount, setAmount] = useState("0");
+  const [step, setStep] = useState<"approve" | "deposit" | "done">("approve");
+
+  const { data: balance } = useReadContract({
+    address: token.address as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: Boolean(address) },
+  });
+
+  const {
+    writeContract: writeApprove,
+    data: approveHash,
+    isPending: isApproving,
+    error: approveError,
+  } = useWriteContract();
+  const { isLoading: isApproveMining, isSuccess: isApproved } =
+    useWaitForTransactionReceipt({ hash: approveHash });
+
+  const {
+    writeContract: writeDeposit,
+    data: depositHash,
+    isPending: isDepositing,
+    error: depositError,
+  } = useWriteContract();
+  const { isLoading: isDepositMining, isSuccess: isDeposited } =
+    useWaitForTransactionReceipt({ hash: depositHash });
+
+  const handleTokenChange = (next: Erc20Token) => {
+    setToken(next);
+    setStep("approve");
+  };
+
+  useEffect(() => {
+    if (isApproved && step === "approve") setStep("deposit");
+  }, [isApproved, step]);
+
+  useEffect(() => {
+    if (isDeposited && step === "deposit") {
+      setStep("done");
+      onDone();
+    }
+  }, [isDeposited, step, onDone]);
+
+  const balanceValue = (balance as bigint | undefined) ?? 0n;
+  const parseAmountUnits = (value: string): bigint | null => {
+    if (!value.trim()) return null;
+    try {
+      return parseUnits(value as `${number}`, token.decimals);
+    } catch {
+      return null;
+    }
+  };
+  const amountUnits = parseAmountUnits(amount);
+  const isPositive = amountUnits !== null && amountUnits > 0n;
+  const exceedsBalance = amountUnits !== null && amountUnits > balanceValue;
+  const formattedBalance = formatUnits(balanceValue, token.decimals);
+  const validationError =
+    !amount.trim() || amountUnits === 0n
+      ? null
+      : amountUnits === null
+        ? "Enter a valid amount."
+        : exceedsBalance
+          ? `Insufficient balance — you have ${formattedBalance} ${token.symbol}.`
+          : null;
+
+  const canSubmit = isPositive && !exceedsBalance && isConnected;
+
+  const setMax = () => setAmount(formattedBalance);
+
+  const handleApprove = () => {
+    if (!canSubmit || amountUnits === null) return;
+    writeApprove({
+      address: token.address as `0x${string}`,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [CONTRACTS.memogentCore as `0x${string}`, amountUnits],
+    });
+  };
+
+  const handleDeposit = () => {
+    if (!canSubmit || amountUnits === null) return;
+    writeDeposit({
+      address: CONTRACTS.memogentCore as `0x${string}`,
+      abi: memogentCoreAbi,
+      functionName: "depositToken",
+      args: [token.address as `0x${string}`, amountUnits],
+    });
+  };
+
+  const busyApprove = isApproving || isApproveMining;
+  const busyDeposit = isDepositing || isDepositMining;
+  const txError =
+    friendlyTxError(approveError) ?? friendlyTxError(depositError);
 
   return (
     <div className="flex flex-col gap-5">
       <CardTitle>Deposit other tokens</CardTitle>
       <CardDescription>
-        Pick a token and amount, then approve and deposit. ERC-20 support is
-        landing soon — Somnia Token deposits are live now.
+        Pick a token and amount, then approve and deposit. Mock BTC / USDC /
+        USDT are pre-deployed on Somnia testnet — anyone can call{" "}
+        <code className="rounded bg-black/[0.05] px-1 py-0.5 text-[12px]">
+          mint(to, amount)
+        </code>{" "}
+        for a self-service faucet.
       </CardDescription>
       <div className="flex flex-col gap-1.5">
         <Label>Select token</Label>
-        <TokenSelect value={token} onChange={setToken} />
+        <TokenSelect value={token} onChange={handleTokenChange} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="erc20-amount">Amount</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="erc20-amount">Amount ({token.symbol})</Label>
+          {isConnected && (
+            <span className="font-apple text-[12px] text-[#1a1a1a]/50">
+              Balance:{" "}
+              <button
+                type="button"
+                onClick={setMax}
+                className="cursor-pointer font-medium text-[#0871E7] underline-offset-2 hover:underline"
+              >
+                {formattedBalance} {token.symbol}
+              </button>
+            </span>
+          )}
+        </div>
         <Input
           id="erc20-amount"
           type="number"
@@ -385,14 +511,45 @@ function Erc20DepositForm() {
           placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
+          aria-invalid={Boolean(validationError)}
+          className={cn(
+            validationError &&
+              "border-[#B91C1C]/60 focus:border-[#B91C1C] focus:ring-[#B91C1C]/20",
+          )}
         />
+        {validationError && (
+          <p className="font-apple text-[12px] text-[#B91C1C]">
+            {validationError}
+          </p>
+        )}
       </div>
+      {txError && (
+        <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+          {txError}
+        </p>
+      )}
       <div className="flex items-center gap-3">
-        <Button variant="primary" disabled>
-          Coming soon
+        <Button
+          variant={step === "approve" ? "primary" : "secondary"}
+          onClick={handleApprove}
+          disabled={step !== "approve" || !canSubmit || busyApprove}
+        >
+          {isApproving && "Confirm approve…"}
+          {isApproveMining && "Approving…"}
+          {!busyApprove && (step === "approve" ? "1. Approve" : "✓ Approved")}
         </Button>
-        <Button variant="secondary" disabled>
-          2. Deposit <LuArrowRight className="size-4" />
+        <Button
+          variant="primary"
+          onClick={handleDeposit}
+          disabled={step !== "deposit" || !canSubmit || busyDeposit}
+        >
+          {isDepositing && "Confirm deposit…"}
+          {isDepositMining && "Sealing on chain…"}
+          {!busyDeposit && (
+            <>
+              2. Deposit <LuArrowRight className="size-4" />
+            </>
+          )}
         </Button>
       </div>
     </div>
