@@ -1,9 +1,30 @@
 import { createDecipheriv } from 'node:crypto';
 import { ethers } from 'ethers';
-import type { Context } from 'grammy';
+import { type Context, InputFile } from 'grammy';
 import { config } from '../../config.js';
 import { logger } from '../../logger.js';
 import * as walletLink from '../../db/repos/walletLink.js';
+
+const TELEGRAM_TEXT_LIMIT = 3500;
+
+function sniffMime(bytes: Buffer): { mime: string; ext: string } {
+  if (bytes.length >= 4) {
+    const h = bytes.subarray(0, 4).toString('hex');
+    if (h.startsWith('89504e47')) return { mime: 'image/png', ext: 'png' };
+    if (h.startsWith('ffd8ff')) return { mime: 'image/jpeg', ext: 'jpg' };
+    if (h.startsWith('47494638')) return { mime: 'image/gif', ext: 'gif' };
+    if (h.startsWith('25504446')) return { mime: 'application/pdf', ext: 'pdf' };
+    if (h.startsWith('504b0304')) return { mime: 'application/zip', ext: 'zip' };
+    if (h.startsWith('00000018') || h.startsWith('00000020'))
+      return { mime: 'video/mp4', ext: 'mp4' };
+  }
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return { mime: 'text/plain', ext: 'txt' };
+  } catch {
+    return { mime: 'application/octet-stream', ext: 'bin' };
+  }
+}
 
 const CORE_ABI = [
   'function getWillInfo(address) view returns (address beneficiary, uint256 lastCheckIn, uint256 inactivePeriod, uint256 deadlineTimestamp, bool executed, bool active)',
@@ -201,24 +222,46 @@ export async function handleClaimCapsule(ctx: Context): Promise<void> {
 
   const computedHash = ethers.keccak256(plaintext);
   const integrityOk = computedHash === onChainHash;
+  const { mime, ext } = sniffMime(plaintext);
+  const isText = mime === 'text/plain';
+  const tooLargeForInline = plaintext.length > TELEGRAM_TEXT_LIMIT;
+  const sendAsDocument = !isText || tooLargeForInline;
 
   logger.info(
-    { owner, beneficiary, cid, size: plaintext.length, integrityOk },
+    { owner, beneficiary, cid, size: plaintext.length, mime, integrityOk, sendAsDocument },
     'claimcapsule: decrypted'
   );
 
-  const text = plaintext.toString('utf-8');
   const integrityLine = integrityOk
     ? '✓ Content hash verified on-chain'
     : '⚠ Content hash MISMATCH — file may be tampered';
 
-  await ctx.reply(
+  const caption =
     `🕯️ *Time Capsule unlocked.*\n\n` +
-      `*From (tap to copy):*\n\`${owner}\`\n\n` +
-      `*IPFS CID:*\n\`${cid}\`\n\n` +
-      `${integrityLine}\n\n` +
-      `*Decrypted message:*\n` +
-      `\`\`\`\n${text}\n\`\`\``,
-    { parse_mode: 'Markdown' }
-  );
+    `*From (tap to copy):*\n\`${owner}\`\n\n` +
+    `*IPFS CID:*\n\`${cid}\`\n\n` +
+    `${integrityLine}`;
+
+  try {
+    if (sendAsDocument) {
+      const filename = `memogent-capsule-${owner.slice(0, 6)}-${owner.slice(-4)}.${ext}`;
+      await ctx.replyWithDocument(new InputFile(plaintext, filename), {
+        caption: `${caption}\n\n_Binary or large content (${mime}, ${plaintext.length} bytes) — sent as file._`,
+        parse_mode: 'Markdown',
+      });
+    } else {
+      await ctx.reply(
+        `${caption}\n\n*Decrypted message:*\n\`\`\`\n${plaintext.toString('utf-8')}\n\`\`\``,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch (err) {
+    logger.error({ owner, err }, 'claimcapsule: reply failed');
+    await ctx.reply(
+      `🚫 *Decrypted, but couldn't deliver content.*\n\n` +
+        `The capsule unlocked successfully (hash verified ${integrityOk ? '✓' : '⚠'}), but Telegram rejected the reply. ` +
+        `Try the FE claim page instead: \`/claim/${owner}\` on the Memogent web app.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
 }
