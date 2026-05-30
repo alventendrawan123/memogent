@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LuArrowRight, LuShieldCheck, LuUpload } from "react-icons/lu";
+import {
+  LuArrowRight,
+  LuLoaderCircle,
+  LuShieldCheck,
+  LuUpload,
+} from "react-icons/lu";
 import { keccak256 } from "viem";
 import {
   useAccount,
@@ -20,6 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui";
 import { CONTRACTS } from "@/lib/contracts";
+import { friendlyTxError } from "@/lib/errors";
 import { OnboardShell } from "./_shell/OnboardShell";
 
 type UploadState =
@@ -150,7 +156,7 @@ export function OnboardCapsulePage() {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="mt-2 flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 bg-[#FAFAF6] px-6 py-10 text-center font-apple text-[14px] text-[#1a1a1a]/70 transition hover:border-[#0871E7]/40 hover:bg-white"
+              className="mt-2 flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 bg-[#FAFAF6] px-6 py-10 text-center font-apple text-[14px] text-[#1a1a1a]/70 transition hover:border-[#0871E7]/40 hover:bg-white"
             >
               <LuUpload className="size-5" />
               {file ? file.name : "Click to choose a file"}
@@ -172,13 +178,13 @@ export function OnboardCapsulePage() {
             />
 
             {upload.status === "error" && (
-              <p className="rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+              <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
                 {upload.message}
               </p>
             )}
-            {attachError && (
-              <p className="rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
-                {attachError.message}
+            {friendlyTxError(attachError) && (
+              <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+                {friendlyTxError(attachError)}
               </p>
             )}
 
@@ -206,8 +212,18 @@ export function OnboardCapsulePage() {
                 disabled={!file || busy}
                 size="lg"
               >
-                {upload.status === "encrypting" && "Encrypting…"}
-                {upload.status === "uploading" && "Uploading to IPFS…"}
+                {upload.status === "encrypting" && (
+                  <>
+                    <LuLoaderCircle className="size-4 animate-spin" />
+                    Encrypting…
+                  </>
+                )}
+                {upload.status === "uploading" && (
+                  <>
+                    <LuLoaderCircle className="size-4 animate-spin" />
+                    Uploading to IPFS…
+                  </>
+                )}
                 {(upload.status === "idle" || upload.status === "error") &&
                   "Encrypt & upload"}
                 {upload.status === "uploaded" && "Re-upload"}
@@ -218,8 +234,18 @@ export function OnboardCapsulePage() {
                 disabled={upload.status !== "uploaded" || busy}
                 size="lg"
               >
-                {isAttaching && "Confirm in wallet…"}
-                {isAttachMining && "Sealing on chain…"}
+                {isAttaching && (
+                  <>
+                    <LuLoaderCircle className="size-4 animate-spin" />
+                    Confirm in wallet…
+                  </>
+                )}
+                {isAttachMining && (
+                  <>
+                    <LuLoaderCircle className="size-4 animate-spin" />
+                    Sealing on chain…
+                  </>
+                )}
                 {!(isAttaching || isAttachMining) && (
                   <>
                     Attach to will <LuArrowRight className="size-4" />

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { LaunchAppButton } from "./LaunchAppButton";
 
 const NAV_LINKS = [
   { label: "Memory", href: "#memory" },
@@ -41,16 +42,7 @@ export function Navbar() {
           ))}
         </ul>
 
-        <Link
-          href="/onboard/create"
-          className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-[#0871E7] px-5 py-2 font-sans text-[14px] text-white shadow-[inset_0_-4px_4px_rgba(255,255,255,0.39)] outline-1 outline-[#0871E7] -outline-offset-1"
-        >
-          <span
-            aria-hidden
-            className="absolute left-[10%] top-[1px] h-4 w-[80%] rounded-[12px] bg-gradient-to-b from-[#DEF0FC] to-transparent transition-transform duration-300 group-hover:scale-x-105"
-          />
-          <span className="relative z-10">Launch App</span>
-        </Link>
+        <LaunchAppButton />
       </nav>
     </div>
   );

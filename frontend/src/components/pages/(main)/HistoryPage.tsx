@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LuExternalLink } from "react-icons/lu";
+import { LuExternalLink, LuLoaderCircle } from "react-icons/lu";
 import {
   Line,
   LineChart,
@@ -21,8 +21,12 @@ import {
   CardTitle,
 } from "@/components/ui";
 import { CONTRACTS, SHANNON_EXPLORER } from "@/lib/contracts";
+import { friendlyTxError } from "@/lib/errors";
 import { relativeTime } from "@/lib/format";
 import { PageHeader } from "./_shell/PageHeader";
+
+const LOG_CHUNK_SIZE = 1000n;
+const LOG_LOOKBACK_BLOCKS = 50_000n;
 
 const RISK_DECISION_EVENT = parseAbiItem(
   "event RiskDecision(address indexed user, string classification, uint256 timestamp)",
@@ -56,15 +60,30 @@ export function HistoryPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const logs = await client.getLogs({
-          address: CONTRACTS.memogentAgent,
-          event: RISK_DECISION_EVENT,
-          args: { user: address },
-          fromBlock: "earliest",
-          toBlock: "latest",
-        });
+        const latest = await client.getBlockNumber();
+        const start =
+          latest > LOG_LOOKBACK_BLOCKS ? latest - LOG_LOOKBACK_BLOCKS : 0n;
+        const ranges: Array<[bigint, bigint]> = [];
+        for (let from = start; from <= latest; from += LOG_CHUNK_SIZE) {
+          const to =
+            from + LOG_CHUNK_SIZE - 1n > latest
+              ? latest
+              : from + LOG_CHUNK_SIZE - 1n;
+          ranges.push([from, to]);
+        }
+        const chunks = await Promise.all(
+          ranges.map(([fromBlock, toBlock]) =>
+            client.getLogs({
+              address: CONTRACTS.memogentAgent,
+              event: RISK_DECISION_EVENT,
+              args: { user: address },
+              fromBlock,
+              toBlock,
+            }),
+          ),
+        );
         if (cancelled) return;
-        const parsed: Decision[] = logs.map((log) => ({
+        const parsed: Decision[] = chunks.flat().map((log) => ({
           classification: String(log.args.classification ?? ""),
           timestamp: BigInt(log.args.timestamp ?? 0n),
           txHash: log.transactionHash ?? "",
@@ -74,7 +93,7 @@ export function HistoryPage() {
         setDecisions(parsed);
       } catch (err) {
         if (!cancelled)
-          setError(err instanceof Error ? err.message : "Could not load logs.");
+          setError(friendlyTxError(err) ?? "Could not load logs.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -109,8 +128,9 @@ export function HistoryPage() {
             </CardDescription>
             <div className="h-64 w-full">
               {loading ? (
-                <div className="flex h-full items-center justify-center font-apple text-[13px] text-[#1a1a1a]/50">
-                  Loading on-chain events…
+                <div className="flex h-full items-center justify-center gap-2 font-apple text-[13px] text-[#1a1a1a]/50">
+                  <LuLoaderCircle className="size-4 animate-spin" />
+                  Scanning Somnia for recent assessments…
                 </div>
               ) : decisions.length === 0 ? (
                 <div className="flex h-full items-center justify-center font-apple text-[13px] text-[#1a1a1a]/50">
@@ -155,7 +175,9 @@ export function HistoryPage() {
           <Card className="border-[#B91C1C]/20 bg-[#FCE4EC]/40">
             <CardContent>
               <CardTitle>Could not load history</CardTitle>
-              <CardDescription>{error}</CardDescription>
+              <p className="break-words font-apple text-[13px] text-[#B91C1C]">
+                {error}
+              </p>
             </CardContent>
           </Card>
         )}

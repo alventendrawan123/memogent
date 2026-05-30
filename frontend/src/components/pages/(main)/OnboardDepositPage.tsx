@@ -25,6 +25,7 @@ import {
   Label,
 } from "@/components/ui";
 import { CONTRACTS, TEST_TOKENS } from "@/lib/contracts";
+import { friendlyTxError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { OnboardShell } from "./_shell/OnboardShell";
 
@@ -148,17 +149,15 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
           onChange={(e) => setAmount(e.target.value)}
         />
       </div>
-      {error && (
-        <p className="font-apple text-[12px] text-[#B91C1C]">{error.message}</p>
+      {friendlyTxError(error) && (
+        <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+          {friendlyTxError(error)}
+        </p>
       )}
       <Button type="submit" disabled={busy} size="lg">
         {isPending && "Confirm in wallet…"}
         {isMining && "Sealing on chain…"}
-        {!busy && (
-          <>
-            Deposit & continue <LuArrowRight className="size-4" />
-          </>
-        )}
+        {!busy && "Deposit & continue"}
       </Button>
     </form>
   );

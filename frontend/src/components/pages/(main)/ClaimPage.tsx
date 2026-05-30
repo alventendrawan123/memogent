@@ -269,9 +269,10 @@ function sniffMime(bytes: Uint8Array): string {
     if (h.startsWith("00000018") || h.startsWith("00000020"))
       return "video/mp4";
   }
-  const sample = bytes.slice(0, 64);
-  const isText = sample.every(
-    (b) => (b >= 0x20 && b < 0x7f) || b === 0x0a || b === 0x0d || b === 0x09,
-  );
-  return isText ? "text/plain" : "application/octet-stream";
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return "text/plain";
+  } catch {
+    return "application/octet-stream";
+  }
 }

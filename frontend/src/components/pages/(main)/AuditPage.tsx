@@ -71,22 +71,40 @@ export function AuditPage({ user }: { user: string }) {
   useEffect(() => {
     if (!target || !client) return;
     let cancelled = false;
+    const CHUNK_SIZE = 1000n;
+    const LOOKBACK = 50_000n;
     const load = async () => {
-      const logs = await client.getLogs({
-        address: CONTRACTS.memogentAgent,
-        event: RISK_DECISION_EVENT,
-        args: { user: target },
-        fromBlock: "earliest",
-        toBlock: "latest",
-      });
-      if (cancelled) return;
-      const parsed: AuditEntry[] = logs.map((log) => ({
-        classification: String(log.args.classification ?? ""),
-        timestamp: BigInt(log.args.timestamp ?? 0n),
-        txHash: log.transactionHash ?? "",
-      }));
-      parsed.sort((a, b) => Number(b.timestamp - a.timestamp));
-      setEntries(parsed);
+      try {
+        const latest = await client.getBlockNumber();
+        const start = latest > LOOKBACK ? latest - LOOKBACK : 0n;
+        const ranges: Array<[bigint, bigint]> = [];
+        for (let from = start; from <= latest; from += CHUNK_SIZE) {
+          const to =
+            from + CHUNK_SIZE - 1n > latest ? latest : from + CHUNK_SIZE - 1n;
+          ranges.push([from, to]);
+        }
+        const chunks = await Promise.all(
+          ranges.map(([fromBlock, toBlock]) =>
+            client.getLogs({
+              address: CONTRACTS.memogentAgent,
+              event: RISK_DECISION_EVENT,
+              args: { user: target },
+              fromBlock,
+              toBlock,
+            }),
+          ),
+        );
+        if (cancelled) return;
+        const parsed: AuditEntry[] = chunks.flat().map((log) => ({
+          classification: String(log.args.classification ?? ""),
+          timestamp: BigInt(log.args.timestamp ?? 0n),
+          txHash: log.transactionHash ?? "",
+        }));
+        parsed.sort((a, b) => Number(b.timestamp - a.timestamp));
+        setEntries(parsed);
+      } catch {
+        if (!cancelled) setEntries([]);
+      }
     };
     void load();
     return () => {

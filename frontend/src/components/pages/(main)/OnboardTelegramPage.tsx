@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LuArrowRight, LuExternalLink, LuMessageCircle } from "react-icons/lu";
-import { SiweMessage } from "siwe";
+import { LuExternalLink, LuMessageCircle } from "react-icons/lu";
+import { createSiweMessage } from "viem/siwe";
 import { useAccount, useSignMessage } from "wagmi";
 import {
   Button,
@@ -31,18 +31,17 @@ export function OnboardTelegramPage() {
     if (!address) return;
     try {
       setState({ status: "signing" });
-      const nonce = crypto.randomUUID();
-      const siwe = new SiweMessage({
-        domain: window.location.host,
+      const nonce = crypto.randomUUID().replace(/-/g, "");
+      const message = createSiweMessage({
         address,
-        statement: "Link Telegram for Memogent life-proof signals.",
+        chainId: 50312,
+        domain: window.location.host,
+        nonce,
         uri: window.location.origin,
         version: "1",
-        chainId: 50312,
-        nonce,
-        issuedAt: new Date().toISOString(),
+        statement: "Link Telegram for Memogent life-proof signals.",
+        issuedAt: new Date(),
       });
-      const message = siwe.prepareMessage();
       const signature = await signMessageAsync({ message });
 
       setState({ status: "linking" });
@@ -151,12 +150,9 @@ export function OnboardTelegramPage() {
         <span className="font-apple text-[12px] uppercase tracking-[0.16em] text-[#1a1a1a]/40">
           Step 3 of 4
         </span>
-        <Link
-          href="/onboard/capsule"
-          className="inline-flex items-center gap-1 font-apple text-[13px] text-[#1a1a1a]/70 hover:text-[#1a1a1a]"
-        >
-          Continue to Time Capsule <LuArrowRight className="size-4" />
-        </Link>
+        <Button asChild size="lg">
+          <Link href="/onboard/capsule">Continue to Time Capsule</Link>
+        </Button>
       </div>
     </OnboardShell>
   );

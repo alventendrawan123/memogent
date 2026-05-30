@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 
 const NAV_LINKS = [
@@ -9,6 +12,8 @@ const NAV_LINKS = [
 ];
 
 export function MainNavbar() {
+  const pathname = usePathname();
+
   return (
     <div className="fixed top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-5xl z-50 pointer-events-none">
       <nav className="pointer-events-auto flex items-center justify-between rounded-full border border-black/10 bg-white/70 px-6 py-3 backdrop-blur-md">
@@ -28,17 +33,26 @@ export function MainNavbar() {
           memogent.
         </Link>
 
-        <ul className="hidden md:flex items-center gap-10">
-          {NAV_LINKS.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="font-sans text-[14px] text-[#1a1a1a] transition-opacity hover:opacity-60"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
+        <ul className="hidden md:flex items-center gap-1">
+          {NAV_LINKS.map((link) => {
+            const active =
+              pathname === link.href || pathname.startsWith(`${link.href}/`);
+            return (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`relative inline-flex items-center rounded-full px-4 py-1.5 font-sans text-[14px] transition-colors ${
+                    active
+                      ? "bg-[#0871E7]/10 font-medium text-[#0871E7]"
+                      : "text-[#1a1a1a] hover:bg-black/[0.04]"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
         <WalletButton />

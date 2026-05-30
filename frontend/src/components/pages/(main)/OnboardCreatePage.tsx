@@ -3,9 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { LuArrowRight } from "react-icons/lu";
 import { isAddress } from "viem";
 import {
   useAccount,
@@ -24,6 +23,7 @@ import {
   Label,
 } from "@/components/ui";
 import { CONTRACTS, SOMNIA_FAUCET } from "@/lib/contracts";
+import { friendlyTxError } from "@/lib/errors";
 import { daysToSeconds } from "@/lib/format";
 import { OnboardShell } from "./_shell/OnboardShell";
 
@@ -36,9 +36,14 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+const TEST_WINDOW_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_TEST_WINDOW === "true";
+const TEST_WINDOW_SECONDS = 300n;
+
 export function OnboardCreatePage() {
   const router = useRouter();
   const { address } = useAccount();
+  const [testWindow, setTestWindow] = useState(false);
   const {
     writeContract,
     data: hash,
@@ -61,19 +66,28 @@ export function OnboardCreatePage() {
 
   const onSubmit = (values: FormValues) => {
     if (!address) return;
+    if (values.beneficiary.toLowerCase() === address.toLowerCase()) {
+      form.setError("beneficiary", {
+        type: "manual",
+        message: "Beneficiary cannot be your own connected wallet.",
+      });
+      return;
+    }
     writeContract({
       address: CONTRACTS.memogentCore,
       abi: memogentCoreAbi,
       functionName: "registerWill",
       args: [
         values.beneficiary as `0x${string}`,
-        daysToSeconds(values.inactivePeriodDays),
+        TEST_WINDOW_ENABLED && testWindow
+          ? TEST_WINDOW_SECONDS
+          : daysToSeconds(values.inactivePeriodDays),
       ],
     });
   };
 
   const busy = isPending || isMining;
-  const errorMessage = writeError?.message;
+  const errorMessage = friendlyTxError(writeError);
 
   return (
     <OnboardShell
@@ -128,8 +142,27 @@ export function OnboardCreatePage() {
                 </p>
               </div>
 
+              {TEST_WINDOW_ENABLED && (
+                <label className="flex items-start gap-2 rounded-lg border border-dashed border-[#B91C1C]/30 bg-[#FCE4EC]/30 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={testWindow}
+                    onChange={(e) => setTestWindow(e.target.checked)}
+                    className="mt-0.5 cursor-pointer accent-[#B91C1C]"
+                  />
+                  <span className="font-apple text-[12px] text-[#1a1a1a]/70">
+                    <span className="font-medium text-[#B91C1C]">
+                      Testing only:
+                    </span>{" "}
+                    use a 5-minute silence window (sends 300s, ignores the days
+                    field) so the full register → execute → claim cycle can be
+                    demoed quickly.
+                  </span>
+                </label>
+              )}
+
               {errorMessage && (
-                <p className="rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+                <p className="break-words rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
                   {errorMessage}
                 </p>
               )}
@@ -141,11 +174,7 @@ export function OnboardCreatePage() {
                 <Button type="submit" disabled={busy} size="lg">
                   {isPending && "Confirm in wallet…"}
                   {isMining && "Sealing on chain…"}
-                  {!busy && (
-                    <>
-                      Continue <LuArrowRight className="size-4" />
-                    </>
-                  )}
+                  {!busy && "Continue"}
                 </Button>
               </div>
             </form>

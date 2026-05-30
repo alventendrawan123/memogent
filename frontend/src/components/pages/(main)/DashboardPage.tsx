@@ -128,7 +128,7 @@ export function DashboardPage() {
   const beneficiary =
     willInfo?.[0] ?? "0x0000000000000000000000000000000000000000";
   const lastCheckIn = willInfo?.[1];
-  const deadlineSec = willInfo?.[3];
+  const deadlineMs = willInfo?.[3];
   const executed = willInfo?.[4] ?? false;
   const active = willInfo?.[5] ?? false;
   const hasWill =
@@ -146,9 +146,9 @@ export function DashboardPage() {
 
   const statusTone = STATUS_TONE[statusValue as StatusKey] ?? "neutral";
   const deadlineLabel = useMemo(() => {
-    if (!deadlineSec) return "—";
-    return relativeTime(deadlineSec);
-  }, [deadlineSec]);
+    if (!deadlineMs) return "—";
+    return relativeTime(Number(deadlineMs) / 1000);
+  }, [deadlineMs]);
 
   const handleCheckIn = () => {
     if (!address) return;

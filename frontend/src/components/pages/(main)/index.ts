@@ -1,3 +1,4 @@
+export { AuditIndexPage } from "./AuditIndexPage";
 export { AuditPage } from "./AuditPage";
 export { ClaimPage } from "./ClaimPage";
 export { DashboardPage } from "./DashboardPage";
