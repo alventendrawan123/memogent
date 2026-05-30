@@ -8,7 +8,7 @@ export function OnboardShell({
   subtitle,
   children,
 }: {
-  stepKey: "create" | "deposit" | "telegram" | "capsule";
+  stepKey: "create" | "deposit" | "invite" | "telegram" | "capsule";
   title: string;
   subtitle?: string;
   children: ReactNode;

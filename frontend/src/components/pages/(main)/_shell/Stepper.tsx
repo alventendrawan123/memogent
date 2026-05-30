@@ -10,6 +10,7 @@ export type OnboardStep = {
 export const ONBOARD_STEPS: OnboardStep[] = [
   { key: "create", label: "Create", href: "/onboard/create" },
   { key: "deposit", label: "Deposit", href: "/onboard/deposit" },
+  { key: "invite", label: "Invite", href: "/onboard/invite" },
   { key: "telegram", label: "Telegram", href: "/onboard/telegram" },
   { key: "capsule", label: "Capsule", href: "/onboard/capsule" },
 ];

@@ -104,19 +104,15 @@ export function OnboardDepositPage() {
               </Tabs.List>
 
               <Tabs.Content value="stt">
-                <SttDepositForm
-                  onDone={() => router.push("/onboard/telegram")}
-                />
+                <SttDepositForm onDone={() => router.push("/onboard/invite")} />
               </Tabs.Content>
               <Tabs.Content value="erc20">
                 <Erc20DepositForm
-                  onDone={() => router.push("/onboard/telegram")}
+                  onDone={() => router.push("/onboard/invite")}
                 />
               </Tabs.Content>
               <Tabs.Content value="nft">
-                <NftDepositForm
-                  onDone={() => router.push("/onboard/telegram")}
-                />
+                <NftDepositForm onDone={() => router.push("/onboard/invite")} />
               </Tabs.Content>
             </Tabs.Root>
           </CardContent>
@@ -124,10 +120,10 @@ export function OnboardDepositPage() {
 
         <div className="mt-6 flex items-center justify-between">
           <span className="font-apple text-[12px] uppercase tracking-[0.16em] text-[#1a1a1a]/40">
-            Step 2 of 4
+            Step 2 of 5
           </span>
           <Link
-            href="/onboard/telegram"
+            href="/onboard/invite"
             className="font-apple text-[13px] text-[#1a1a1a]/60 underline-offset-4 hover:underline"
           >
             Skip — deposit later

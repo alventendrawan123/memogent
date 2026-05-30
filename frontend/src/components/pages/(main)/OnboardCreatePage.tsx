@@ -173,7 +173,7 @@ export function OnboardCreatePage() {
 
               <div className="flex items-center justify-between pt-2">
                 <span className="font-apple text-[12px] uppercase tracking-[0.16em] text-[#1a1a1a]/40">
-                  Step 1 of 4
+                  Step 1 of 5
                 </span>
                 <Button type="submit" disabled={busy} size="lg">
                   {isPending && "Confirm in wallet…"}

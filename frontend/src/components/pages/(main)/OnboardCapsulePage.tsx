@@ -286,7 +286,7 @@ export function OnboardCapsulePage() {
 
       <div className="mx-auto mt-8 flex max-w-3xl items-center justify-between px-2">
         <span className="font-apple text-[12px] uppercase tracking-[0.16em] text-[#1a1a1a]/40">
-          Step 4 of 4
+          Step 5 of 5
         </span>
         <Link
           href="/dashboard"
