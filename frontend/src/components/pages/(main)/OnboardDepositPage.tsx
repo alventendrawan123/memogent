@@ -1,19 +1,18 @@
 "use client";
 
 import * as Tabs from "@radix-ui/react-tabs";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LuArrowRight, LuExternalLink } from "react-icons/lu";
-import { formatEther, isAddress, parseEther, parseUnits } from "viem";
+import { LuArrowRight, LuChevronDown, LuExternalLink } from "react-icons/lu";
+import { formatEther, isAddress, parseEther } from "viem";
 import {
   useAccount,
   useBalance,
-  useReadContract,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { erc20Abi } from "@/abi/erc20";
 import { erc721Abi } from "@/abi/erc721";
 import { memogentCoreAbi } from "@/abi/MemogentCore";
 import {
@@ -33,10 +32,31 @@ import { OnboardShell } from "./_shell/OnboardShell";
 type DepositTab = "stt" | "erc20" | "nft";
 
 const TAB_LABELS: Record<DepositTab, string> = {
-  stt: "STT",
-  erc20: "ERC-20",
+  stt: "Somnia Token",
+  erc20: "Other Token",
   nft: "NFT",
 };
+
+const ERC20_TOKENS = [
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    logo: "/Assets/Images/Logo-Token/btc-logo.svg",
+    address: TEST_TOKENS.erc20Mock,
+  },
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    logo: "/Assets/Images/Logo-Token/usdc-logo.svg",
+    address: TEST_TOKENS.erc20Mock,
+  },
+  {
+    symbol: "USDT",
+    name: "Tether",
+    logo: "/Assets/Images/Logo-Token/usdt-logo.svg",
+    address: TEST_TOKENS.erc20Mock,
+  },
+] as const;
 
 export function OnboardDepositPage() {
   const router = useRouter();
@@ -78,9 +98,7 @@ export function OnboardDepositPage() {
                 />
               </Tabs.Content>
               <Tabs.Content value="erc20">
-                <Erc20DepositForm
-                  onDone={() => router.push("/onboard/telegram")}
-                />
+                <Erc20DepositForm />
               </Tabs.Content>
               <Tabs.Content value="nft">
                 <NftDepositForm
@@ -126,7 +144,7 @@ function formatBalance(wei: bigint): string {
 
 function SttDepositForm({ onDone }: { onDone: () => void }) {
   const { address, isConnected } = useAccount();
-  const [amount, setAmount] = useState("0.5");
+  const [amount, setAmount] = useState("0");
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isMining, isSuccess: isMined } =
     useWaitForTransactionReceipt({
@@ -149,12 +167,11 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
   const leavesNoGas =
     isPositive && !exceedsBalance && balanceValue - amountWei < GAS_RESERVE;
 
-  const validationError = !amount.trim()
-    ? null
-    : amountWei === null
-      ? "Enter a valid amount."
-      : amountWei <= 0n
-        ? "Amount must be greater than zero."
+  const validationError =
+    !amount.trim() || amountWei === 0n
+      ? null
+      : amountWei === null
+        ? "Enter a valid amount."
         : exceedsBalance
           ? `Insufficient balance — you have ${formatBalance(balanceValue)} STT.`
           : null;
@@ -206,21 +223,36 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
             </span>
           )}
         </div>
-        <Input
-          id="stt-amount"
-          type="number"
-          step="any"
-          min={0}
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          aria-invalid={Boolean(validationError)}
-          className={
-            validationError
-              ? "border-[#B91C1C]/60 focus:border-[#B91C1C] focus:ring-[#B91C1C]/20"
-              : undefined
-          }
-        />
+        <div className="relative">
+          <Input
+            id="stt-amount"
+            type="number"
+            step="any"
+            min={0}
+            inputMode="decimal"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            aria-invalid={Boolean(validationError)}
+            className={cn(
+              "pr-20",
+              validationError &&
+                "border-[#B91C1C]/60 focus:border-[#B91C1C] focus:ring-[#B91C1C]/20",
+            )}
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center gap-1.5">
+            <Image
+              src="/Assets/Images/Logo-Token/somnia-logo.png"
+              alt=""
+              width={18}
+              height={18}
+              className="size-[18px] rounded-full"
+            />
+            <span className="font-apple text-[13px] font-medium text-[#1a1a1a]/70">
+              STT
+            </span>
+          </span>
+        </div>
         {validationError ? (
           <p className="font-apple text-[12px] text-[#B91C1C]">
             {validationError}
@@ -245,81 +277,102 @@ function SttDepositForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Erc20DepositForm({ onDone }: { onDone: () => void }) {
-  const { address } = useAccount();
-  const [token, setToken] = useState<string>(TEST_TOKENS.erc20Mock);
-  const [amount, setAmount] = useState("10");
-  const [step, setStep] = useState<"approve" | "deposit" | "done">("approve");
+type Erc20Token = (typeof ERC20_TOKENS)[number];
 
-  const { data: decimals } = useReadContract({
-    address: isAddress(token) ? (token as `0x${string}`) : undefined,
-    abi: erc20Abi,
-    functionName: "decimals",
-    query: { enabled: isAddress(token) },
-  });
+function TokenSelect({
+  value,
+  onChange,
+}: {
+  value: Erc20Token;
+  onChange: (token: Erc20Token) => void;
+}) {
+  const [open, setOpen] = useState(false);
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApproving,
-  } = useWriteContract();
-  const { isLoading: isApproveMining, isSuccess: isApproved } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex h-11 w-full cursor-pointer items-center justify-between rounded-xl border border-black/10 bg-white px-3 font-apple text-[14px] text-[#1a1a1a] transition hover:border-black/20"
+      >
+        <span className="flex items-center gap-2.5">
+          <Image
+            src={value.logo}
+            alt=""
+            width={22}
+            height={22}
+            className="size-[22px] rounded-full"
+          />
+          <span className="font-medium">{value.symbol}</span>
+          <span className="text-[#1a1a1a]/45">{value.name}</span>
+        </span>
+        <LuChevronDown
+          className={cn(
+            "size-4 text-[#1a1a1a]/50 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
 
-  const {
-    writeContract: writeDeposit,
-    data: depositHash,
-    isPending: isDepositing,
-  } = useWriteContract();
-  const { isLoading: isDepositMining, isSuccess: isDeposited } =
-    useWaitForTransactionReceipt({ hash: depositHash });
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-10 cursor-default"
+          />
+          <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg shadow-black/5">
+            {ERC20_TOKENS.map((token) => (
+              <button
+                key={token.symbol}
+                type="button"
+                onClick={() => {
+                  onChange(token);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left font-apple text-[14px] transition hover:bg-black/[0.03]",
+                  token.symbol === value.symbol && "bg-[#0871E7]/[0.06]",
+                )}
+              >
+                <Image
+                  src={token.logo}
+                  alt=""
+                  width={22}
+                  height={22}
+                  className="size-[22px] rounded-full"
+                />
+                <span className="font-medium text-[#1a1a1a]">
+                  {token.symbol}
+                </span>
+                <span className="text-[#1a1a1a]/45">{token.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (isApproved && step === "approve") setStep("deposit");
-  }, [isApproved, step]);
-
-  useEffect(() => {
-    if (isDeposited && step === "deposit") {
-      setStep("done");
-      onDone();
-    }
-  }, [isDeposited, step, onDone]);
-
-  const handleApprove = () => {
-    if (!isAddress(token) || decimals === undefined) return;
-    writeApprove({
-      address: token as `0x${string}`,
-      abi: erc20Abi,
-      functionName: "approve",
-      args: [CONTRACTS.memogentCore, parseUnits(amount, decimals as number)],
-    });
-  };
-
-  const handleDeposit = () => {
-    if (!isAddress(token) || decimals === undefined || !address) return;
-    writeDeposit({
-      address: CONTRACTS.memogentCore,
-      abi: memogentCoreAbi,
-      functionName: "depositToken",
-      args: [token as `0x${string}`, parseUnits(amount, decimals as number)],
-    });
-  };
+function Erc20DepositForm() {
+  const [token, setToken] = useState<Erc20Token>(ERC20_TOKENS[0]);
+  const [amount, setAmount] = useState("0");
 
   return (
     <div className="flex flex-col gap-5">
-      <CardTitle>Deposit ERC-20</CardTitle>
+      <CardTitle>Deposit other tokens</CardTitle>
       <CardDescription>
-        Two-step: approve the vault to spend, then deposit. Test token MTT
-        pre-filled.
+        Pick a token and amount, then approve and deposit. ERC-20 support is
+        landing soon — Somnia Token deposits are live now.
       </CardDescription>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="erc20-token">Token address</Label>
-        <Input
-          id="erc20-token"
-          placeholder="0x…"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-        />
+        <Label>Select token</Label>
+        <TokenSelect value={token} onChange={setToken} />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="erc20-amount">Amount</Label>
@@ -329,34 +382,17 @@ function Erc20DepositForm({ onDone }: { onDone: () => void }) {
           step="any"
           min={0}
           inputMode="decimal"
+          placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
       </div>
       <div className="flex items-center gap-3">
-        <Button
-          variant={step === "approve" ? "primary" : "secondary"}
-          disabled={step !== "approve" || isApproving || isApproveMining}
-          onClick={handleApprove}
-        >
-          {isApproving || isApproveMining
-            ? "Approving…"
-            : step === "approve"
-              ? "1. Approve"
-              : "1. Approved"}
+        <Button variant="primary" disabled>
+          Coming soon
         </Button>
-        <Button
-          variant={step === "deposit" ? "primary" : "secondary"}
-          disabled={step !== "deposit" || isDepositing || isDepositMining}
-          onClick={handleDeposit}
-        >
-          {isDepositing || isDepositMining ? (
-            "Depositing…"
-          ) : (
-            <>
-              2. Deposit <LuArrowRight className="size-4" />
-            </>
-          )}
+        <Button variant="secondary" disabled>
+          2. Deposit <LuArrowRight className="size-4" />
         </Button>
       </div>
     </div>
