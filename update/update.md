@@ -57,8 +57,33 @@
 
 ## TODO baru 2026-05-30 — UX polish
 
-- [ ] **CTA "Register a new will" di dashboard saat will udah executed (LOW priority, polish demo).** Sekarang setelah will executed, dashboard cuma tampil banner "Inheritance has fired" + vault 0 STT, **gak ada link/tombol buat balik onboard ulang**. User mesti ketik manual `localhost:3000/onboard/create` di address bar. Untuk **real use case** desain ini bener (orang meninggal gak register lagi) — tapi buat **testing cycle ulang + demo recovery** ribet. **Saran:**
+- [x] **CTA "Register a new will" di dashboard saat will udah executed (LOW priority, polish demo).** SHIPPED — `DashboardPage.tsx` banner "Inheritance has fired" sekarang ada link "Start a new will (testing) →" ke `/onboard/create`. Commit `10f2ea4`. Sekarang setelah will executed, dashboard cuma tampil banner "Inheritance has fired" + vault 0 STT, **gak ada link/tombol buat balik onboard ulang**. User mesti ketik manual `localhost:3000/onboard/create` di address bar. Untuk **real use case** desain ini bener (orang meninggal gak register lagi) — tapi buat **testing cycle ulang + demo recovery** ribet. **Saran:**
   - Di banner "Inheritance has fired" → tambah tombol secondary kecil **"Start fresh"** atau **"Register new will (for testing)"** → push ke `/onboard/create`
   - Atau di Vault snapshot card kalau STT balance 0 + executed → link kecil "Begin a new will"
 
   Low priority — bukan blocker, cuma smooth-in demo + testing flow.
+
+- [x] **Beneficiary invite UI di FE (HIGH priority untuk demo polish).** SHIPPED — page `/invite` + `InviteBeneficiaryPage` component + API route `POST /api/telegram/invite` (SIWE auth, insert link_token via supabase-admin 24h TTL). Dashboard Vault snapshot card juga ada tombol "Invite beneficiary" kalau will active. Commit `10f2ea4`. Sekarang owner mesti buka terminal & run CLI `pnpm invite-beneficiary <owner> <beneficiary>` buat generate link buat beneficiary. Buat demo + real use case, owner gak boleh disuruh sentuh terminal. **Yang perlu dibikin:**
+  - **Page/section UI** di `/onboard/telegram` (tambah section "Invite your beneficiary" terpisah dari owner self-link) atau di `/dashboard` (tombol "Invite my beneficiary" di Vault snapshot card kalau will active)
+  - Input beneficiary address (default auto-fill dari `getWillInfo(owner).beneficiary` kalau ada), button "Generate invite link"
+  - Setelah generate: tampil URL + copy button + ideally "Share via WhatsApp" deeplink (`https://wa.me/?text=...`)
+  - **Backend route** `app/api/telegram/invite/route.ts` (POST):
+    - Body: `{ ownerAddress, beneficiaryAddress, signature, message }` (SIWE auth dari owner — mirip `/api/telegram/link` yang udah jalan)
+    - Verify owner == will's actual owner via `core.getWillInfo`
+    - Insert ke `link_token` via `supabase-admin.ts`: `{ token: 'link_' + randomHex(16), wallet_address: beneficiaryAddress, nonce, expires_at: Date.now()+24h*3600*1000, inviter_wallet: ownerAddress }`
+    - Return `{ url: 'https://t.me/memogent_v1_bot?start=' + token }`
+  - **Reference impl** sudah ada di `agent/src/cli/invite-beneficiary.ts` — tinggal port logic-nya ke API route.
+
+  Tanpa ini, demo cycle yang melibatkan beneficiary Telegram (`/claimcapsule` etc) terhambat karena owner mesti terminal-savvy.
+
+- [x] **Beneficiary discovery / Claim entry point di FE (HIGH priority demo).** SHIPPED — MainNavbar tambah link `Claim` antara Dashboard/History. Page `/claim` (index, tanpa owner) tampil: (a) form input owner address, (b) auto-detect via Supabase `tracked_will` query filter `beneficiary == connectedAddress` → kalau ketemu tampil "Wills that name you" card dengan badge Released/Sealed + tombol direct ke `/claim/<owner>`. Commit `10f2ea4`. Sekarang `Claim` link sama sekali GAK ADA di navbar. Beneficiary yang connect wallet:
+  - Dashboard auto-redirect ke `/onboard/create` (karena wallet beneficiary belum punya will sebagai owner) → user kebawa ke onboarding flow yg SALAH (mereka dateng buat claim, bukan register will baru)
+  - Gak ada way buat tau owner address atau navigate ke `/claim/<owner>` tanpa hafal URL
+  - Saat ini owner mesti DM beneficiary URL `localhost:3000/claim/<owner-addr>` lewat WA — terlalu manual
+
+  **Fix yang dibutuhkan:**
+  - **Add `Claim` link** di MainNavbar (jejer Dashboard/History/Audit) — kalau diklik tanpa owner address, tampil page "Enter owner address" + bisa paste address dari WillExecuted DM
+  - **Auto-detect beneficiary on connect**: pas wallet connect, query event `WillRegistered` (atau bisa juga read `tracked_will` Supabase) yang `beneficiary == connectedAddress` → kalau ada match, dashboard tampil card "You are the named beneficiary for will of `<owner-addr>`" + tombol "Open claim page". Pakai chunk `getLogs` 1000-block yg udah lo bikin di History/Audit, atau lebih cepet query Supabase `tracked_will` filter `beneficiary`.
+  - **Bonus**: kalau dispatcher Telegram udah kirim WillExecuted DM dengan `/claimcapsule` ref + tx URL (Bima udah implement), juga tampilkan owner address dengan link `/claim/<owner>` di DM-nya biar beneficiary tinggal klik (jangan cuma `/claimcapsule` reference — kasih link FE juga sebagai alternatif).
+
+- [x] **BUG bot `/claimcapsule` — silent fail untuk capsule binary / besar (HIGH priority).** SHIPPED — handler sekarang `sniffMime()` (magic bytes + UTF-8 fatal decode) → kalau non-text atau > 3500 chars, pakai `ctx.replyWithDocument(new InputFile(plaintext, 'memogent-capsule-<addr>.<ext>'))`. Reply call udah dibungkus try/catch yang fallback ke graceful error message kalau tetep gagal. Commit `ffbc13c`. Handler `agent/src/telegram/handlers/claimcapsule.ts:215-222` post plaintext sebagai inline code block: `` `\`\`\`\n${plaintext.toString('utf-8')}\n\`\`\`` ``. Buat capsule **teks pendek** (sesi R2 95 byte "bima round 2...") jalan ✅. Buat capsule **binary atau >3500 char** (test today: PNG screenshot 274 KB) → reply jadi ~274KB string → Telegram API reject 400 `MESSAGE_TOO_LONG` → handler **silent fail** (gak ada try/catch sendMessage). User stuck di "🔍 Verifying eligibility on-chain..." selamanya, gak ada error feedback. **Fix:** setelah decrypt, deteksi binary (mime sniff Bima yang udah ada di FE) atau ukuran > ~3500 char → pakai `ctx.replyWithDocument(new InputFile(plaintext, filename))` kirim sebagai file attachment. Atau truncate + kasih download URL via Pinata gateway. Sekalian wrap `ctx.reply`/`replyWithDocument` di try/catch yang reply graceful error ke user (bukan silent throw). Verifikasi: on-chain getDecryptionKey + Pinata fetch udah dites jalan barusan, jadi murni di reply step.
