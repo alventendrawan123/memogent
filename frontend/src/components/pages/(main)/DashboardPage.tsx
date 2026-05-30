@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
 import {
@@ -256,8 +257,15 @@ export function DashboardPage() {
               <Separator className="my-3" />
               <div className="flex items-center justify-between font-apple text-[14px] text-[#1a1a1a]/80">
                 <span>STT balance</span>
-                <strong className="text-[#1a1a1a]">
+                <strong className="inline-flex items-center gap-1.5 text-[#1a1a1a]">
                   {hasWill ? formatEther(vaultSttRaw) : "—"} STT
+                  <Image
+                    src="/Assets/Images/Logo-Token/somnia-logo.png"
+                    alt="STT"
+                    width={16}
+                    height={16}
+                    className="size-4 rounded-full"
+                  />
                 </strong>
               </div>
               <div className="flex items-center justify-between font-apple text-[14px] text-[#1a1a1a]/80">
