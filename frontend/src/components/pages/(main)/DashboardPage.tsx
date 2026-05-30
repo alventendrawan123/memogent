@@ -229,6 +229,12 @@ export function DashboardPage() {
                 </code>
                 .
               </CardDescription>
+              <Link
+                href="/onboard/create"
+                className="mt-2 inline-flex items-center gap-1 font-apple text-[13px] text-[#0871E7] underline-offset-2 hover:underline"
+              >
+                Start a new will (testing) →
+              </Link>
             </CardContent>
           </Card>
         )}
@@ -314,14 +320,16 @@ export function DashboardPage() {
                   {hasWill ? shortAddress(beneficiary) : "—"}
                 </code>
               </div>
-              <Button
-                asChild
-                variant="secondary"
-                size="sm"
-                className="mt-2 self-start"
-              >
-                <Link href="/onboard/deposit">Top up</Link>
-              </Button>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/onboard/deposit">Top up</Link>
+                </Button>
+                {hasWill && !executed && (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href="/invite">Invite beneficiary</Link>
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 

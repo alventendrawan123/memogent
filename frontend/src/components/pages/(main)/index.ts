@@ -1,8 +1,10 @@
 export { AuditIndexPage } from "./AuditIndexPage";
 export { AuditPage } from "./AuditPage";
+export { ClaimIndexPage } from "./ClaimIndexPage";
 export { ClaimPage } from "./ClaimPage";
 export { DashboardPage } from "./DashboardPage";
 export { HistoryPage } from "./HistoryPage";
+export { InviteBeneficiaryPage } from "./InviteBeneficiaryPage";
 export { OnboardCapsulePage } from "./OnboardCapsulePage";
 export { OnboardCreatePage } from "./OnboardCreatePage";
 export { OnboardDepositPage } from "./OnboardDepositPage";

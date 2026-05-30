@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LuArrowRight,
   LuCircleCheck,
@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui";
 import { TELEGRAM_BOT_URL } from "@/lib/contracts";
+import { isTelegramLinked } from "@/lib/supabase";
 import { OnboardShell } from "./_shell/OnboardShell";
 
 type LinkState =
@@ -31,7 +32,26 @@ export function OnboardTelegramPage() {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [state, setState] = useState<LinkState>({ status: "idle" });
-  const linked = state.status === "ready";
+  const [alreadyLinked, setAlreadyLinked] = useState(false);
+  const linked = state.status === "ready" || alreadyLinked;
+
+  useEffect(() => {
+    if (!address) {
+      setAlreadyLinked(false);
+      return;
+    }
+    let cancelled = false;
+    isTelegramLinked(address)
+      .then((result) => {
+        if (!cancelled) setAlreadyLinked(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAlreadyLinked(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
   const startLink = async () => {
     if (!address) return;
@@ -78,59 +98,87 @@ export function OnboardTelegramPage() {
       <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
         <Card>
           <CardContent>
-            <CardTitle>Sign and open the bot</CardTitle>
-            <CardDescription>
-              You&apos;ll sign one EIP-4361 message — no transaction, no gas.
-              The bot opens with a one-time link token.
-            </CardDescription>
+            {alreadyLinked && state.status === "idle" ? (
+              <>
+                <CardTitle>Telegram already linked.</CardTitle>
+                <CardDescription>
+                  This wallet is paired with the bot. You&apos;ll get DMs when
+                  your will fires, plus AI farewell + Time Capsule unlock
+                  instructions.
+                </CardDescription>
+                <p className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#E8F3EA] px-3 py-2 font-apple text-[12px] text-[#1F7A3D]">
+                  <LuCircleCheck className="size-4 shrink-0" />
+                  Bound — no action needed. Continue to the next step.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Link
+                    href={TELEGRAM_BOT_URL}
+                    target="_blank"
+                    className="inline-flex items-center gap-1 font-apple text-[13px] text-[#0871E7] hover:underline"
+                  >
+                    Open bot tab <LuExternalLink className="size-3.5" />
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <CardTitle>Sign and open the bot</CardTitle>
+                <CardDescription>
+                  You&apos;ll sign one EIP-4361 message — no transaction, no
+                  gas. The bot opens with a one-time link token.
+                </CardDescription>
 
-            <ol className="mt-2 flex flex-col gap-3 font-apple text-[14px] text-[#1a1a1a]/75">
-              <li>1. Press the button below.</li>
-              <li>2. Approve the SIWE signature in your wallet.</li>
-              <li>3. The Memogent bot opens in a new tab with the link key.</li>
-              <li>4. Press the bot&apos;s Start button — done.</li>
-            </ol>
+                <ol className="mt-2 flex flex-col gap-3 font-apple text-[14px] text-[#1a1a1a]/75">
+                  <li>1. Press the button below.</li>
+                  <li>2. Approve the SIWE signature in your wallet.</li>
+                  <li>
+                    3. The Memogent bot opens in a new tab with the link key.
+                  </li>
+                  <li>4. Press the bot&apos;s Start button — done.</li>
+                </ol>
 
-            {state.status === "error" && (
-              <p className="rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
-                {state.message}
-              </p>
-            )}
+                {state.status === "error" && (
+                  <p className="rounded-lg bg-[#FCE4EC]/60 px-3 py-2 font-apple text-[12px] text-[#B91C1C]">
+                    {state.message}
+                  </p>
+                )}
 
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <Button
-                onClick={startLink}
-                disabled={
-                  !address ||
-                  state.status === "signing" ||
-                  state.status === "linking"
-                }
-                size="lg"
-              >
-                <LuMessageCircle className="size-4" />
-                {state.status === "signing" && "Sign in wallet…"}
-                {state.status === "linking" && "Linking…"}
-                {state.status === "ready" && "Open bot again"}
-                {(state.status === "idle" || state.status === "error") &&
-                  "Sign & link Telegram"}
-              </Button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button
+                    onClick={startLink}
+                    disabled={
+                      !address ||
+                      state.status === "signing" ||
+                      state.status === "linking"
+                    }
+                    size="lg"
+                  >
+                    <LuMessageCircle className="size-4" />
+                    {state.status === "signing" && "Sign in wallet…"}
+                    {state.status === "linking" && "Linking…"}
+                    {state.status === "ready" && "Open bot again"}
+                    {(state.status === "idle" || state.status === "error") &&
+                      "Sign & link Telegram"}
+                  </Button>
 
-              {state.status === "ready" && (
-                <Link
-                  href={`${TELEGRAM_BOT_URL}?start=${state.token}`}
-                  target="_blank"
-                  className="inline-flex items-center gap-1 font-apple text-[13px] text-[#0871E7] hover:underline"
-                >
-                  Open bot tab <LuExternalLink className="size-3.5" />
-                </Link>
-              )}
-            </div>
+                  {state.status === "ready" && (
+                    <Link
+                      href={`${TELEGRAM_BOT_URL}?start=${state.token}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1 font-apple text-[13px] text-[#0871E7] hover:underline"
+                    >
+                      Open bot tab <LuExternalLink className="size-3.5" />
+                    </Link>
+                  )}
+                </div>
 
-            {linked && (
-              <p className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#E8F3EA] px-3 py-2 font-apple text-[12px] text-[#1F7A3D]">
-                <LuCircleCheck className="size-4 shrink-0" />
-                Signed. Press Start in the bot tab, then continue below.
-              </p>
+                {state.status === "ready" && (
+                  <p className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#E8F3EA] px-3 py-2 font-apple text-[12px] text-[#1F7A3D]">
+                    <LuCircleCheck className="size-4 shrink-0" />
+                    Signed. Press Start in the bot tab, then continue below.
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
