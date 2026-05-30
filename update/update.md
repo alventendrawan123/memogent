@@ -10,11 +10,11 @@
 
 - [x] **`PINATA_JWT` udah ada di `.env.local`** (server-side, non-`NEXT_PUBLIC`). Capsule upload aman.
 
-- [ ] **Test `/claim/[owner]` page** pakai will yang udah executed: owner `0x7de5a9cA72456455dd83231242a0c6adA97FB4de`, beneficiary `0x4674E7e207BabF3850981aAf27B76E5D55863E69` (minta PK beneficiary ke tim buat connect). Pastiin decrypt jalan. → **Masih manual, butuh PK beneficiary dari tim.** Kode decrypt + mime fix (bawah) udah siap.
+- [x] **Test `/claim/[owner]` page** pakai will executed (owner `0x7de5...FB4de`, beneficiary `0x4674...3E69`). Test PASS: connect 0x4674, buka `/claim/0x7de5...` → badge "Released" → "Decrypt & open" → fetch key (view call as 0x4674) → IPFS fetch → AES-256-GCM decrypt → keccak256 hash verified → plaintext match. Path trustless terbukti end-to-end.
 
 - [x] **BUG Telegram-link #1 — SIWE nonce.** Udah beres sejak migrasi ke viem: `OnboardTelegramPage.tsx` pakai `createSiweMessage` (viem/siwe) + `nonce = crypto.randomUUID().replace(/-/g, "")` (alfanumerik, no dash). Round-trip lolos. (Pakai viem, bukan lib `siwe`, jadi `generateNonce` gak dipakai.)
 
-- [⚠] **BUG Telegram-link #2 — token gak disimpan.** Kode FIXED: `app/api/telegram/link/route.ts` sekarang insert `{ token, wallet_address: parsed.address, nonce: parsed.nonce, expires_at: Date.now()+10min, inviter_wallet: null }` ke tabel `link_token` via `src/lib/supabase-admin.ts` (service_role client). **ACTION:** set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (server-side, non-`NEXT_PUBLIC`) di `.env.local`. Tanpa env itu route balikin 503 (graceful, gak crash).
+- [x] **BUG Telegram-link #2 — token gak disimpan.** Kode FIXED: `app/api/telegram/link/route.ts` sekarang insert `{ token, wallet_address: parsed.address, nonce: parsed.nonce, expires_at: Date.now()+10min, inviter_wallet: null }` ke tabel `link_token` via `src/lib/supabase-admin.ts` (service_role client). `.env.local` user udah keisi `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` per 2026-05-30.
 
 - [x] **BUG dashboard — "in 56390 years".** Fixed. Diverifikasi dari kontrak: `MemogentCore.sol` simpan `deadlineTimestamp = (block.timestamp + sec) * 1000` (**ms**), sedang `lastCheckIn` = detik. `DashboardPage.tsx` sekarang `relativeTime(Number(deadlineMs) / 1000)` + var di-rename `deadlineSec`→`deadlineMs`. `ClaimPage`/`lastCheckIn` gak disentuh (udah detik).
 
@@ -40,7 +40,7 @@
 
 - [x] **`MOCK_TOKENS` di `frontend/src/lib/contracts.ts`** — object `{ btc, usdc, usdt }` masing-masing `{ address, decimals }`. Additive, gak ngubah `TEST_TOKENS` lama.
 
-- [⚠] **`Erc20DepositForm` impl di `OnboardDepositPage.tsx`** (sebelumnya stub "Coming soon"). Mirror pola `SttDepositForm` (balance + max button) + `NftDepositForm` (2-step approve→deposit):
+- [x] **`Erc20DepositForm` impl di `OnboardDepositPage.tsx`** (sebelumnya stub "Coming soon"). Mirror pola `SttDepositForm` (balance + max button) + `NftDepositForm` (2-step approve→deposit):
   - `useReadContract(erc20Abi.balanceOf)` buat baca saldo per token
   - `parseUnits(amount, token.decimals)` (bukan `parseEther`) — handle decimals per token
   - Step state `approve → deposit → done` dengan auto-transition lewat `useWaitForTransactionReceipt`
@@ -52,3 +52,13 @@
   **Catatan lint:** dua warning biome kosmetik (`bg-black/[0.05]` → `bg-black/5`, `break-words` → `wrap-break-word`) sengaja **gak gw apply** — pola yang sama dipakai di SttDepositForm/NftDepositForm lama, biar konsisten sama style codebase lo. Kalau lo prefer canonical, refactor project-wide sekalian.
 
   Boleh lo refine/rewrite kalau ada bug atau style mismatch — gw bikin biar test deposit BTC/USDC/USDT bisa jalan end-to-end di FE.
+
+---
+
+## TODO baru 2026-05-30 — UX polish
+
+- [ ] **CTA "Register a new will" di dashboard saat will udah executed (LOW priority, polish demo).** Sekarang setelah will executed, dashboard cuma tampil banner "Inheritance has fired" + vault 0 STT, **gak ada link/tombol buat balik onboard ulang**. User mesti ketik manual `localhost:3000/onboard/create` di address bar. Untuk **real use case** desain ini bener (orang meninggal gak register lagi) — tapi buat **testing cycle ulang + demo recovery** ribet. **Saran:**
+  - Di banner "Inheritance has fired" → tambah tombol secondary kecil **"Start fresh"** atau **"Register new will (for testing)"** → push ke `/onboard/create`
+  - Atau di Vault snapshot card kalau STT balance 0 + executed → link kecil "Begin a new will"
+
+  Low priority — bukan blocker, cuma smooth-in demo + testing flow.
