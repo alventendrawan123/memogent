@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LuArrowRight,
   LuCircleCheck,
@@ -32,9 +32,11 @@ import {
   Separator,
 } from "@/components/ui";
 import { CONTRACTS } from "@/lib/contracts";
+import { friendlyTxError } from "@/lib/errors";
 import { relativeTime, shortAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AiActivityPanel } from "./_dashboard/AiActivityPanel";
+import { CheckInPopup } from "./_shell/CheckInPopup";
 import { PageHeader } from "./_shell/PageHeader";
 
 const STATUS_TONE = {
@@ -109,10 +111,41 @@ export function DashboardPage() {
     onLogs: () => queryClient.invalidateQueries(),
   });
 
-  const { writeContract, data: checkInHash, isPending } = useWriteContract();
-  const { isLoading: isMining } = useWaitForTransactionReceipt({
-    hash: checkInHash,
-  });
+  const {
+    writeContract,
+    data: checkInHash,
+    isPending,
+    error: checkInError,
+  } = useWriteContract();
+  const { isLoading: isMining, isSuccess: isCheckedIn } =
+    useWaitForTransactionReceipt({
+      hash: checkInHash,
+    });
+
+  const [popup, setPopup] = useState<{
+    variant: "success" | "error";
+    title: string;
+    subtitle: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isCheckedIn || !checkInHash) return;
+    setPopup({
+      variant: "success",
+      title: "Check-in OK",
+      subtitle: "Silence window reset.",
+    });
+    queryClient.invalidateQueries();
+  }, [isCheckedIn, checkInHash, queryClient]);
+
+  useEffect(() => {
+    if (!checkInError) return;
+    setPopup({
+      variant: "error",
+      title: "Check-in failed",
+      subtitle: friendlyTxError(checkInError),
+    });
+  }, [checkInError]);
 
   const data = reads.data;
   const willInfo = data?.[0]?.result as
@@ -162,6 +195,13 @@ export function DashboardPage() {
 
   return (
     <>
+      <CheckInPopup
+        open={popup !== null}
+        variant={popup?.variant ?? "success"}
+        title={popup?.title ?? ""}
+        subtitle={popup?.subtitle}
+        onClose={() => setPopup(null)}
+      />
       <PageHeader
         trail={["Dashboard"]}
         title={hasWill ? "Welcome back." : "Your guardian sleeps."}
