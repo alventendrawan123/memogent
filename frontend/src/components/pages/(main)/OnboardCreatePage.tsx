@@ -25,6 +25,7 @@ import {
 import { CONTRACTS, SOMNIA_FAUCET } from "@/lib/contracts";
 import { friendlyTxError } from "@/lib/errors";
 import { daysToSeconds } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { OnboardShell } from "./_shell/OnboardShell";
 
 const schema = z.object({
@@ -134,11 +135,14 @@ export function OnboardCreatePage() {
                   type="number"
                   min={1}
                   max={365}
+                  disabled={testWindow}
+                  className={cn(testWindow && "cursor-not-allowed opacity-50")}
                   {...form.register("inactivePeriodDays")}
                 />
                 <p className="font-apple text-[12px] text-[#1a1a1a]/50">
-                  Inheritance fires if you don&apos;t check in within this
-                  window. Most users pick 14–60 days.
+                  {testWindow
+                    ? "Ignored — using 5-minute test window instead."
+                    : "Inheritance fires if you don’t check in within this window. Most users pick 14–60 days."}
                 </p>
               </div>
 
