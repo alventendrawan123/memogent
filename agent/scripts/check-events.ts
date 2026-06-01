@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ethers } from 'ethers';
 import { config } from '../src/config.js';
 
-const OWNER = '0x812477C24E55367AA5E920C761C6A1C7dA22215b'; // Alice
+const OWNER = process.argv[2] ?? '0x812477C24E55367AA5E920C761C6A1C7dA22215b';
 
 const CORE_EVENT_ABI = [
   'event WillRegistered(address indexed owner, address indexed beneficiary, uint256 deadlineMs)',

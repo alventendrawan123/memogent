@@ -22,7 +22,11 @@ contract MemogentAgent is IAgentCallback {
         "EXECUTE (critical inactivity, trigger inheritance). "
         "Weigh ALL signals together. Respond with exactly one word from the allowed values.";
 
-    uint256 public constant ASSESSMENT_COOLDOWN = 1 hours;
+    // Demo-tuned: short on-chain cooldown so an LLM verdict can escalate
+    // multiple times within a 20-minute silence window. Off-chain Worker
+    // also enforces AUTO_ASSESS_COOLDOWN_MS (default 3 min in demo, 1 hour
+    // in production) to keep deposit burn in check.
+    uint256 public constant ASSESSMENT_COOLDOWN = 1 minutes;
 
     struct PendingAssessment {
         address user;
