@@ -174,7 +174,11 @@ export function AuditPage({ user }: { user: string }) {
                   <dt className="text-[11px] uppercase tracking-[0.16em] text-[#1a1a1a]/45">
                     Deadline
                   </dt>
-                  <dd>{relativeTime(willInfo?.[3])}</dd>
+                  <dd>
+                    {willInfo?.[3]
+                      ? relativeTime(Number(willInfo[3]) / 1000)
+                      : "—"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-[11px] uppercase tracking-[0.16em] text-[#1a1a1a]/45">

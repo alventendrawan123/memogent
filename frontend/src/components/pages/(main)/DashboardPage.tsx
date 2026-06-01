@@ -122,6 +122,17 @@ export function DashboardPage() {
       hash: checkInHash,
     });
 
+  const {
+    writeContract: writeDeactivate,
+    data: deactivateHash,
+    isPending: isDeactivating,
+    error: deactivateError,
+  } = useWriteContract();
+  const { isLoading: isDeactivateMining, isSuccess: isDeactivated } =
+    useWaitForTransactionReceipt({
+      hash: deactivateHash,
+    });
+
   const [popup, setPopup] = useState<{
     variant: "success" | "error";
     title: string;
@@ -137,6 +148,26 @@ export function DashboardPage() {
     });
     queryClient.invalidateQueries();
   }, [isCheckedIn, checkInHash, queryClient]);
+
+  useEffect(() => {
+    if (!isDeactivated || !deactivateHash) return;
+    setPopup({
+      variant: "success",
+      title: "Will deactivated",
+      subtitle:
+        "Vault returned to your wallet. You can register a new will now.",
+    });
+    queryClient.invalidateQueries();
+  }, [isDeactivated, deactivateHash, queryClient]);
+
+  useEffect(() => {
+    if (!deactivateError) return;
+    setPopup({
+      variant: "error",
+      title: "Deactivate failed",
+      subtitle: friendlyTxError(deactivateError),
+    });
+  }, [deactivateError]);
 
   useEffect(() => {
     if (!checkInError) return;
@@ -165,10 +196,12 @@ export function DashboardPage() {
   const deadlineMs = willInfo?.[3];
   const executed = willInfo?.[4] ?? false;
   const active = willInfo?.[5] ?? false;
-  const hasWill =
-    active ||
-    (willInfo !== undefined &&
-      beneficiary !== "0x0000000000000000000000000000000000000000");
+  // Only treat the wallet as having an active will when the on-chain `active` flag
+  // is true. Deactivated/executed wills leave the record on-chain (beneficiary
+  // address persists) but the user should see the "Your guardian sleeps" state
+  // and be free to register a new will. The `executed` banner is rendered
+  // separately when `executed` is true.
+  const hasWill = active;
 
   const classification = (latestAssessment?.[0] ?? "") as
     | "SAFE"
@@ -190,6 +223,19 @@ export function DashboardPage() {
       address: CONTRACTS.memogentCore,
       abi: memogentCoreAbi,
       functionName: "checkIn",
+    });
+  };
+
+  const handleDeactivate = () => {
+    if (!address) return;
+    const confirmed = window.confirm(
+      "Deactivate this will?\n\n• All vault assets (STT + tokens + NFTs) are returned to your wallet immediately.\n• The will record stays on-chain but becomes inactive.\n• You can register a new one afterwards.",
+    );
+    if (!confirmed) return;
+    writeDeactivate({
+      address: CONTRACTS.memogentCore,
+      abi: memogentCoreAbi,
+      functionName: "deactive",
     });
   };
 
@@ -327,6 +373,20 @@ export function DashboardPage() {
                 {hasWill && !executed && (
                   <Button asChild variant="secondary" size="sm">
                     <Link href="/invite">Invite beneficiary</Link>
+                  </Button>
+                )}
+                {hasWill && active && !executed && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeactivate}
+                    disabled={isDeactivating || isDeactivateMining}
+                    className="text-[#B91C1C] hover:bg-[#FCE4EC]/50"
+                  >
+                    {isDeactivating && "Confirm in wallet…"}
+                    {isDeactivateMining && "Deactivating…"}
+                    {!(isDeactivating || isDeactivateMining) &&
+                      "Deactivate will (testing)"}
                   </Button>
                 )}
               </div>

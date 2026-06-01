@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import { safeSend } from './bot.js';
 import * as walletLink from '../db/repos/walletLink.js';
+import { computeDeliveredAssets, formatAssetSummary } from '../listener/willAssets.js';
 
 const EXPLORER_TX_BASE = 'https://shannon-explorer.somnia.network/tx';
 const explorerTxUrl = (txHash: string): string => `${EXPLORER_TX_BASE}/${txHash}`;
@@ -54,27 +55,42 @@ export async function notifyWillExecuted(
 ): Promise<void> {
   const txUrl = explorerTxUrl(txHash);
   const ownerLink = await walletLink.getByWallet(ownerAddress);
+  const bnfLink = await walletLink.getByWallet(beneficiaryAddress);
+
+  let assetsBlock = '';
+  if (ownerLink || bnfLink) {
+    try {
+      const summary = await computeDeliveredAssets(ownerAddress);
+      assetsBlock =
+        `\n\n*Assets transferred:*\n` +
+        `${formatAssetSummary(summary)}\n`;
+    } catch (err) {
+      logger.warn({ ownerAddress, err }, 'notifyWillExecuted: asset summary failed');
+    }
+  }
+
   if (ownerLink) {
     await safeSend(
       ownerLink.chat_id,
       `📜 *Your will has been executed.*\n\n` +
         `Memogent classified your wallet as inactive long enough to trigger the inheritance, ` +
         `and assets have been transferred to your beneficiary:\n` +
-        `\`${beneficiaryAddress}\`\n\n` +
-        `🔗 On-chain proof:\n${txUrl}`,
+        `\`${beneficiaryAddress}\`` +
+        assetsBlock +
+        `\n🔗 On-chain proof:\n${txUrl}`,
       { parse_mode: 'Markdown' }
     );
   }
 
-  const bnfLink = await walletLink.getByWallet(beneficiaryAddress);
   if (bnfLink) {
     let msg =
       `🚨 *Inheritance triggered — you are the beneficiary.*\n\n` +
       `*Owner (full address — tap to copy):*\n` +
       `\`${ownerAddress}\`\n\n` +
       `Their wallet went inactive long enough that Memogent autonomously executed their digital will. ` +
-      `On-chain assets registered in the will (native STT + tracked ERC-20 / ERC-721) have been transferred to your linked wallet.\n\n` +
-      `🔗 Execution tx:\n${txUrl}`;
+      `On-chain assets registered in the will have been transferred to your linked wallet.` +
+      assetsBlock +
+      `\n🔗 Execution tx:\n${txUrl}`;
     if (capsuleCid) {
       msg +=
         `\n\n🕯️ *Time Capsule attached*\n` +

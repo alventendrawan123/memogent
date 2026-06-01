@@ -39,12 +39,18 @@ type FormValues = z.infer<typeof schema>;
 
 const TEST_WINDOW_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_TEST_WINDOW === "true";
-const TEST_WINDOW_SECONDS = 300n;
+
+const TEST_WINDOW_OPTIONS = {
+  "5min": { seconds: 300n, label: "5 min — quick demo" },
+  "20min": { seconds: 1200n, label: "20 min — rehearsal (lets AI assess)" },
+} as const;
+type TestWindowKey = keyof typeof TEST_WINDOW_OPTIONS;
 
 export function OnboardCreatePage() {
   const router = useRouter();
   const { address } = useAccount();
   const [testWindow, setTestWindow] = useState(false);
+  const [testWindowKey, setTestWindowKey] = useState<TestWindowKey>("5min");
   const {
     writeContract,
     data: hash,
@@ -81,7 +87,7 @@ export function OnboardCreatePage() {
       args: [
         values.beneficiary as `0x${string}`,
         TEST_WINDOW_ENABLED && testWindow
-          ? TEST_WINDOW_SECONDS
+          ? TEST_WINDOW_OPTIONS[testWindowKey].seconds
           : daysToSeconds(values.inactivePeriodDays),
       ],
     });
@@ -141,28 +147,52 @@ export function OnboardCreatePage() {
                 />
                 <p className="font-apple text-[12px] text-[#1a1a1a]/50">
                   {testWindow
-                    ? "Ignored — using 5-minute test window instead."
+                    ? `Ignored — using ${TEST_WINDOW_OPTIONS[testWindowKey].label.split(" — ")[0]} test window instead.`
                     : "Inheritance fires if you don’t check in within this window. Most users pick 14–60 days."}
                 </p>
               </div>
 
               {TEST_WINDOW_ENABLED && (
-                <label className="flex items-start gap-2 rounded-lg border border-dashed border-[#B91C1C]/30 bg-[#FCE4EC]/30 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={testWindow}
-                    onChange={(e) => setTestWindow(e.target.checked)}
-                    className="mt-0.5 cursor-pointer accent-[#B91C1C]"
-                  />
-                  <span className="font-apple text-[12px] text-[#1a1a1a]/70">
-                    <span className="font-medium text-[#B91C1C]">
-                      Testing only:
-                    </span>{" "}
-                    use a 5-minute silence window (sends 300s, ignores the days
-                    field) so the full register → execute → claim cycle can be
-                    demoed quickly.
-                  </span>
-                </label>
+                <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[#B91C1C]/30 bg-[#FCE4EC]/30 px-3 py-2">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={testWindow}
+                      onChange={(e) => setTestWindow(e.target.checked)}
+                      className="mt-0.5 cursor-pointer accent-[#B91C1C]"
+                    />
+                    <span className="font-apple text-[12px] text-[#1a1a1a]/70">
+                      <span className="font-medium text-[#B91C1C]">
+                        Testing only:
+                      </span>{" "}
+                      use a short silence window (ignores the days field) so the
+                      full register → execute → claim cycle can be demoed
+                      quickly.
+                    </span>
+                  </label>
+                  {testWindow && (
+                    <div className="flex flex-col gap-1.5 pl-6">
+                      {(
+                        Object.keys(TEST_WINDOW_OPTIONS) as TestWindowKey[]
+                      ).map((key) => (
+                        <label
+                          key={key}
+                          className="flex cursor-pointer items-center gap-2 font-apple text-[12px] text-[#1a1a1a]/70"
+                        >
+                          <input
+                            type="radio"
+                            name="testWindowDuration"
+                            value={key}
+                            checked={testWindowKey === key}
+                            onChange={() => setTestWindowKey(key)}
+                            className="cursor-pointer accent-[#B91C1C]"
+                          />
+                          {TEST_WINDOW_OPTIONS[key].label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {errorMessage && (

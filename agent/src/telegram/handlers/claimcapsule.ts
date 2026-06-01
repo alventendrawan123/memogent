@@ -4,6 +4,7 @@ import { type Context, InputFile } from 'grammy';
 import { config } from '../../config.js';
 import { logger } from '../../logger.js';
 import * as walletLink from '../../db/repos/walletLink.js';
+import { computeDeliveredAssets, formatAssetSummary } from '../../listener/willAssets.js';
 
 const TELEGRAM_TEXT_LIMIT = 3500;
 
@@ -236,9 +237,15 @@ export async function handleClaimCapsule(ctx: Context): Promise<void> {
     ? '✓ Content hash verified on-chain'
     : '⚠ Content hash MISMATCH — file may be tampered';
 
+  const assets = await computeDeliveredAssets(owner);
+  const assetsBlock =
+    `*Assets transferred to your wallet:*\n` +
+    `${formatAssetSummary(assets)}\n\n`;
+
   const caption =
     `🕯️ *Time Capsule unlocked.*\n\n` +
     `*From (tap to copy):*\n\`${owner}\`\n\n` +
+    assetsBlock +
     `*IPFS CID:*\n\`${cid}\`\n\n` +
     `${integrityLine}`;
 
