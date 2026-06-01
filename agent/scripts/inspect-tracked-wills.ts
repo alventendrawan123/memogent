@@ -1,7 +1,10 @@
 import 'dotenv/config';
 import { supabase } from '../src/db/supabase.js';
 
-const ASSESS_COOLDOWN_MS = 60 * 60 * 1000;
+const ASSESS_COOLDOWN_MS = Number.parseInt(
+  process.env.AUTO_ASSESS_COOLDOWN_MS ?? String(60 * 60 * 1000),
+  10,
+);
 
 async function main() {
   const now = Date.now();
