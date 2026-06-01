@@ -1,16 +1,19 @@
-import { Contract, JsonRpcProvider, Network, type ContractEventPayload } from 'ethers';
+import { Contract, type EventLog, JsonRpcProvider, Network } from 'ethers';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { MEMOGENT_AGENT_EVENTS, MEMOGENT_CORE_EVENTS, TIME_CAPSULE_EVENTS } from './abi.js';
 import {
   onAssessmentRequested,
-  onRiskDecision,
-  onExecutionTriggered,
-  onWillExecuted,
-  onWillRegistered,
   onCapsuleAttached,
   onEmpathyMessageGenerated,
+  onExecutionTriggered,
+  onRiskDecision,
+  onWillExecuted,
+  onWillRegistered,
 } from './handlers.js';
+import { EventPoller } from './poller.js';
+
+const POLL_INTERVAL_MS = 4000;
 
 export type Listener = {
   start: () => Promise<void>;
@@ -32,103 +35,137 @@ export function createListener(): Listener | null {
     ? new Contract(config.contracts.capsule, [...TIME_CAPSULE_EVENTS], provider)
     : null;
 
+  const pollers: EventPoller[] = [
+    new EventPoller(
+      provider,
+      agentContract,
+      'AssessmentRequested',
+      async (log: EventLog) => {
+        await onAssessmentRequested({
+          requestId: log.args[0] as bigint,
+          user: log.args[1] as string,
+          deposit: log.args[2] as bigint,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'AssessmentRequested' },
+    ),
+    new EventPoller(
+      provider,
+      agentContract,
+      'RiskDecision',
+      async (log: EventLog) => {
+        await onRiskDecision({
+          user: log.args[0] as string,
+          classification: log.args[1] as string,
+          timestamp: log.args[2] as bigint,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'RiskDecision' },
+    ),
+    new EventPoller(
+      provider,
+      agentContract,
+      'ExecutionTriggered',
+      async (log: EventLog) => {
+        await onExecutionTriggered({
+          user: log.args[0] as string,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'ExecutionTriggered' },
+    ),
+    new EventPoller(
+      provider,
+      agentContract,
+      'EmpathyMessageGenerated',
+      async (log: EventLog) => {
+        await onEmpathyMessageGenerated({
+          user: log.args[0] as string,
+          message: log.args[1] as string,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'EmpathyMessageGenerated' },
+    ),
+    new EventPoller(
+      provider,
+      coreContract,
+      'WillRegistered',
+      async (log: EventLog) => {
+        await onWillRegistered({
+          owner: log.args[0] as string,
+          beneficiary: log.args[1] as string,
+          deadlineMs: log.args[2] as bigint,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'WillRegistered' },
+    ),
+    new EventPoller(
+      provider,
+      coreContract,
+      'WillExecuted',
+      async (log: EventLog) => {
+        await onWillExecuted({
+          owner: log.args[0] as string,
+          beneficiary: log.args[1] as string,
+          executedAt: log.args[2] as bigint,
+          txHash: log.transactionHash,
+          blockNumber: log.blockNumber,
+        });
+      },
+      { intervalMs: POLL_INTERVAL_MS, label: 'WillExecuted' },
+    ),
+  ];
+
+  if (capsuleContract) {
+    pollers.push(
+      new EventPoller(
+        provider,
+        capsuleContract,
+        'CapsuleAttached',
+        async (log: EventLog) => {
+          await onCapsuleAttached({
+            owner: log.args[0] as string,
+            beneficiary: log.args[1] as string,
+            cid: log.args[2] as string,
+            contentHash: log.args[3] as string,
+            txHash: log.transactionHash,
+            blockNumber: log.blockNumber,
+          });
+        },
+        { intervalMs: POLL_INTERVAL_MS, label: 'CapsuleAttached' },
+      ),
+    );
+  }
+
   return {
     async start() {
+      const startBlock = await provider.getBlockNumber();
       logger.info(
         {
           core: config.contracts.core,
           agent: config.contracts.agent,
           capsule: config.contracts.capsule || '(disabled)',
+          startBlock,
+          pollerCount: pollers.length,
+          pollIntervalMs: POLL_INTERVAL_MS,
         },
-        'Starting event listener'
+        'Starting event listener (chunked-polling mode)',
       );
-
-      await agentContract.on('AssessmentRequested', async (requestId, user, deposit, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onAssessmentRequested({
-          requestId,
-          user,
-          deposit,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      await agentContract.on('RiskDecision', async (user, classification, timestamp, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onRiskDecision({
-          user,
-          classification,
-          timestamp,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      await agentContract.on('ExecutionTriggered', async (user, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onExecutionTriggered({
-          user,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      await agentContract.on('EmpathyMessageGenerated', async (user, message, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onEmpathyMessageGenerated({
-          user,
-          message,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      await coreContract.on('WillRegistered', async (owner, beneficiary, deadlineMs, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onWillRegistered({
-          owner,
-          beneficiary,
-          deadlineMs,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      await coreContract.on('WillExecuted', async (owner, beneficiary, executedAt, eventArg) => {
-        const evt = eventArg as ContractEventPayload;
-        await onWillExecuted({
-          owner,
-          beneficiary,
-          executedAt,
-          txHash: evt.log.transactionHash,
-          blockNumber: evt.log.blockNumber,
-        });
-      });
-
-      if (capsuleContract) {
-        await capsuleContract.on('CapsuleAttached', async (owner, beneficiary, cid, contentHash, eventArg) => {
-          const evt = eventArg as ContractEventPayload;
-          await onCapsuleAttached({
-            owner,
-            beneficiary,
-            cid,
-            contentHash,
-            txHash: evt.log.transactionHash,
-            blockNumber: evt.log.blockNumber,
-          });
-        });
-      }
-
-      const currentBlock = await provider.getBlockNumber();
-      logger.info({ currentBlock }, 'Listener subscribed to events');
+      await Promise.all(pollers.map((p) => p.start(startBlock)));
     },
 
     async stop() {
       logger.info('Stopping listener');
-      await agentContract.removeAllListeners();
-      await coreContract.removeAllListeners();
-      if (capsuleContract) await capsuleContract.removeAllListeners();
+      for (const poller of pollers) poller.stop();
       provider.destroy();
     },
   };
