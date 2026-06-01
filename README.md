@@ -21,13 +21,13 @@
 
 ## What is Memogent?
 
-**Memogent** is an autonomous digital inheritance protocol on Somnia. It is the AI-powered successor to [SomMemo](./reference/SomMemo/) — our prior winning entry at the Somnia Reactivity hackathon, which proved that the Reactivity precompile could autonomously transfer inheritance at a deadline. Memogent layers an on-chain LLM agent on top of that foundation.
+**Memogent** is an autonomous digital inheritance protocol on Somnia. It builds on lessons from an earlier Reactivity-only inheritance prototype — which proved that Somnia's Reactivity precompile alone could autonomously transfer assets at a deadline — and layers an on-chain LLM agent on top.
 
 A user registers a will, names a beneficiary, deposits assets, and (optionally) attaches an AES-256-GCM encrypted Time Capsule. Memogent then runs two autonomous systems in parallel:
 
 1. **An on-chain AI guardian.** An off-chain Worker periodically collects three liveness signals (on-chain check-in age, wallet transaction age, Telegram presence) and dispatches them to the `MemogentAgent` contract. The contract bundles the signals with a hard-coded system prompt and forwards the request to **Somnia Agent Platform**, where three validators run the LLM independently, vote consensus, sign the verdict, and write it back on-chain. The verdict is one of `SAFE`, `WATCH`, `GRACE`, or `EXECUTE`.
 
-2. **A Reactivity precompile fail-safe.** The exact same Schedule-subscription mechanism that powered SomMemo. At the deadline timestamp, the precompile fires `onEvent()` on `MemogentCore` autonomously — no Worker, no Telegram, no server required.
+2. **A Reactivity precompile fail-safe.** A `Schedule` subscription created at `registerWill()` time. At the deadline timestamp, the precompile fires `onEvent()` on `MemogentCore` autonomously — no Worker, no Telegram, no server required.
 
 If the AI escalates to `EXECUTE`, inheritance can fire early. If the AI stays conservative, the precompile fires at the deadline regardless. Two layers of autonomy; no human in the loop.
 
@@ -42,7 +42,7 @@ When inheritance fires, Memogent additionally:
 
 | Problem | Description |
 |---------|-------------|
-| **Single-mechanism inheritance is brittle** | SomMemo, multisig-with-timer, and similar designs use one trigger. A bug in that trigger = total loss of execution. |
+| **Single-mechanism inheritance is brittle** | Reactivity-only, multisig-with-timer, and similar designs use one trigger. A bug in that trigger = total loss of execution. |
 | **Pure-timer inheritance is dumb** | A naive timer can't distinguish "user is genuinely gone" from "user is on vacation." It fires the moment the clock hits zero. |
 | **Off-chain AI inheritance is opaque** | If you put a model behind an API, the heir can't verify why it decided "execute." There is no trail. |
 | **No emotional bridge** | Most inheritance protocols transfer assets and call it done. The heir gets cold value, not closure. |
@@ -373,7 +373,7 @@ memogent/
 │
 ├── docs/                            Demo guide + flow doc + teaser script
 ├── skill/                           Claude Code skill bundles (foundry / somnia / telegram)
-├── reference/SomMemo/               Predecessor project — preserved for reference
+├── reference/                       Earlier Reactivity-only prototype — preserved for diffing
 └── README.md
 ```
 
@@ -439,7 +439,7 @@ pnpm dev                   # http://localhost:3000
 
 ### Operational requirement — 32 STT minimum on `MemogentCore`
 
-Same as SomMemo: the contract that owns the Reactivity subscription must hold ≥ 32 STT. This is a holding requirement, not a per-call deposit. If the balance drops below the threshold, subsequent `subscribe()` calls revert.
+The contract that owns the Reactivity subscription must hold ≥ 32 STT at all times. This is a holding requirement enforced by the Reactivity precompile, not a per-call deposit. If the balance drops below the threshold, subsequent `subscribe()` calls revert.
 
 ### LLM dispatch deposit math
 
@@ -465,7 +465,7 @@ Somnia testnet rejects `eth_getLogs` calls with a block range over 1000. Memogen
 
 ### Why the Schedule subscription (vs BlockTick / EpochTick)
 
-Same reasoning as SomMemo. From the Somnia docs: *"The subscription to Schedule is one-off and will be deleted after triggering."*
+From the Somnia docs: *"The subscription to Schedule is one-off and will be deleted after triggering."*
 
 | Event | Frequency | Right for Memogent? |
 |---|---|---|
@@ -475,11 +475,11 @@ Same reasoning as SomMemo. From the Somnia docs: *"The subscription to Schedule 
 
 ---
 
-## Acknowledgement — built on SomMemo
+## What Memogent adds over a Reactivity-only baseline
 
-Memogent extends [SomMemo](./reference/SomMemo/), our prior winning entry at the Somnia Reactivity hackathon, which proved that the Reactivity precompile could autonomously execute inheritance at a deadline. The vault model, Schedule-subscription mechanism, and `onEvent` execution path are direct inheritors of that work. Memogent adds the AI guardian layer on top:
+The vault, Schedule-subscription mechanism, and `onEvent` execution path follow the pattern of any straightforward Reactivity-based inheritance protocol. Memogent's contribution is the AI guardian layer on top:
 
-| Capability | SomMemo | Memogent |
+| Capability | Reactivity-only baseline | Memogent |
 |---|---|---|
 | Autonomous on-chain execution | ✅ Reactivity precompile only | ✅ Reactivity precompile **plus** LLM-driven early execute |
 | Owner liveness signal | On-chain check-in only | On-chain check-in + wallet last-tx + Telegram presence |
