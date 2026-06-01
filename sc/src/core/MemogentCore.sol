@@ -6,12 +6,9 @@ import {ISomniaEventHandler} from "../interfaces/ISomniaEventHandler.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {IERC721} from "../interfaces/IERC721.sol";
 import {SomniaExtensions} from "../libraries/SomniaExtensions.sol";
-import {SafeTransfer} from "../libraries/SafeTransfer.sol";
-import {ReentrancyGuard} from "../utils/ReentrancyGuard.sol";
 
 
-contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
-    using SafeTransfer for IERC20;
+contract MemogentCore is ISomniaEventHandler {
     ISomniaReactivityPrecompile public immutable reactivityPrecompile;
     address public immutable precompileAddress;
 
@@ -153,7 +150,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         emit DepositSTT(msg.sender, msg.value);
     }
 
-    function depositToken(address _tokenAddress, uint256 _amount) external onlyActiveWill nonReentrant {
+    function depositToken(address _tokenAddress, uint256 _amount) external onlyActiveWill{
         require(_amount > 0, "Memogent: Amount must be greater than 0");
         bool success = IERC20(_tokenAddress).transferFrom(msg.sender, address(this), _amount);
         require(success, "Memogent: Token transfer failed");
@@ -184,7 +181,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         emit DepositToken(msg.sender, _tokenAddress, _amount);
     }
 
-    function depositNFT(address _nftContract, uint256 _tokenId) external onlyActiveWill nonReentrant {
+    function depositNFT(address _nftContract, uint256 _tokenId) external onlyActiveWill {
         require(IERC721(_nftContract).ownerOf(_tokenId) == msg.sender, "Memogent: Not the owner of the NFT");
         IERC721(_nftContract).safeTransferFrom(msg.sender, address(this), _tokenId);
         vaultNFTs[msg.sender].push(NFTAsset({
@@ -202,7 +199,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         emit DepositNFT(msg.sender, _nftContract, _tokenId);
     }
 
-    function withdraw() external onlyActiveWill nonReentrant {
+    function withdraw() external onlyActiveWill {
         uint256 sttAmount = vaultSTT[msg.sender];
         vaultSTT[msg.sender] = 0;
 
@@ -220,7 +217,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         for (uint256 i = 0; i < tokenCount; i++) {
             TokenAsset memory asset = vaultTokens[msg.sender][i];
             if (asset.amount > 0) {
-                IERC20(asset.tokenAddress).safeTransfer(msg.sender, asset.amount);
+                IERC20(asset.tokenAddress).transfer(msg.sender, asset.amount);
                 _vaultHistory[msg.sender].push(VaultRecord({
                     actType: 4,
                     asset: asset.tokenAddress,
@@ -306,7 +303,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         for (uint256 i = 0; i < tokenCount; i++) {
             TokenAsset memory asset = vaultTokens[msg.sender][i];
             if (asset.amount > 0) {
-                IERC20(asset.tokenAddress).safeTransfer(msg.sender, asset.amount);
+                IERC20(asset.tokenAddress).transfer(msg.sender, asset.amount);
                 _vaultHistory[msg.sender].push(VaultRecord({
                     actType: 4,
                     asset: asset.tokenAddress,
@@ -416,7 +413,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         emit AgentAuthoritySet(agent);
     }
 
-    function executeFromAgent(address willOwner) external nonReentrant {
+    function executeFromAgent(address willOwner) external {
         require(msg.sender == agentAuthority, "Memogent: not agent");
         _executeInheritance(willOwner);
     }
@@ -425,7 +422,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         uint256 subscriptionId,
         bytes32[] calldata eventTopics,
         bytes calldata /*eventData*/
-    ) external override nonReentrant {
+    ) external override {
         address owner = subscriptionIdToOwner[subscriptionId];
         if (owner == address(0) && eventTopics.length > 1) {
             uint256 deadlineKey = uint256(eventTopics[1]) / 1000 * 1000;
@@ -455,7 +452,7 @@ contract MemogentCore is ISomniaEventHandler, ReentrancyGuard {
         for (uint256 i = 0; i < tokenCount; i++) {
             TokenAsset memory asset = vaultTokens[owner][i];
             if (asset.amount > 0) {
-                IERC20(asset.tokenAddress).safeTransfer(beneficiary, asset.amount);
+                IERC20(asset.tokenAddress).transfer(beneficiary, asset.amount);
             }
         }
         delete vaultTokens[owner];
