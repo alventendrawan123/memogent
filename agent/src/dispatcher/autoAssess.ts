@@ -57,7 +57,26 @@ export async function autoAssessTick(): Promise<void> {
       },
       'autoAssess: dispatching assessRiskWithContext'
     );
-    await dispatchAssessRiskWithContext(will.owner_address, contextString);
+    const txHash = await dispatchAssessRiskWithContext(will.owner_address, contextString);
+
+    // Stamp cooldown immediately on a successful dispatch so the next tick
+    // doesn't re-fire the same assessment. Previously this relied on the
+    // `AssessmentRequested` event handler updating `last_assessed_at_ms`,
+    // which leaves a 60+ second window where the Worker can re-dispatch and
+    // burn LLM deposit (each dispatch costs ~0.4 STT). The handler still runs
+    // later — it just refines `last_classification` once the LLM verdict
+    // lands. If the dispatch tx itself failed (txHash === null), skip the
+    // stamp so the next tick retries.
+    if (txHash) {
+      try {
+        await trackedWill.recordAssessment(will.owner_address, will.last_classification, now);
+      } catch (err) {
+        logger.warn(
+          { owner: will.owner_address, err },
+          'autoAssess: failed to stamp last_assessed_at_ms (cooldown may not engage)',
+        );
+      }
+    }
   }
 }
 
