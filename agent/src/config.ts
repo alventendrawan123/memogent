@@ -50,6 +50,20 @@ export const config = {
   },
   logLevel: optional('LOG_LEVEL', 'info') as 'trace' | 'debug' | 'info' | 'warn' | 'error',
   activityDebounceMs: parseInt(optional('ACTIVITY_DEBOUNCE_MS', '60000'), 10),
+  // AutoAssess dispatcher tuning. Production defaults (5-min tick + 1-hour
+  // cooldown per will) keep LLM call cost low. For demo/rehearsal where the
+  // silence window is short (e.g. 20 minutes) override via env on Railway so
+  // escalation SAFE -> WATCH -> GRACE -> EXECUTE fits inside the window.
+  dispatcher: {
+    tickIntervalMs: parseInt(
+      optional('AUTO_ASSESS_TICK_INTERVAL_MS', String(5 * 60 * 1000)),
+      10,
+    ),
+    cooldownMs: parseInt(
+      optional('AUTO_ASSESS_COOLDOWN_MS', String(60 * 60 * 1000)),
+      10,
+    ),
+  },
 } as const;
 
 export type Config = typeof config;

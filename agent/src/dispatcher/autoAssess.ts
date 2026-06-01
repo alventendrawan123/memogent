@@ -1,16 +1,15 @@
+import { config } from '../config.js';
 import { trackedWill } from '../db/repos/index.js';
 import type { TrackedWill } from '../db/types.js';
 import { dispatchAssessRiskWithContext } from './agentWriter.js';
 import { aggregateSignals, signalsToString } from './signalAggregator.js';
 import { logger } from '../logger.js';
 
-const ASSESS_COOLDOWN_MS = 60 * 60 * 1000;
-
 export function shouldAssess(will: TrackedWill, now: number): boolean {
   if (!will.active) return false;
   if (now >= will.deadline_ms) return false;
   const last = will.last_assessed_at_ms ?? 0;
-  return now - last >= ASSESS_COOLDOWN_MS;
+  return now - last >= config.dispatcher.cooldownMs;
 }
 
 export function elapsedPercent(will: TrackedWill, now: number): number {
