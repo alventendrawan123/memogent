@@ -31,8 +31,11 @@ import { OnboardShell } from "./_shell/OnboardShell";
 const schema = z.object({
   beneficiary: z
     .string()
-    .refine((value) => isAddress(value), "Enter a valid Ethereum address"),
-  inactivePeriodDays: z.coerce.number().int().min(1).max(365),
+    .refine(
+      (value): boolean => isAddress(value),
+      "Enter a valid Ethereum address",
+    ),
+  inactivePeriodDays: z.number().int().min(1).max(365),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -143,7 +146,9 @@ export function OnboardCreatePage() {
                   max={365}
                   disabled={testWindow}
                   className={cn(testWindow && "cursor-not-allowed opacity-50")}
-                  {...form.register("inactivePeriodDays")}
+                  {...form.register("inactivePeriodDays", {
+                    valueAsNumber: true,
+                  })}
                 />
                 <p className="font-apple text-[12px] text-[#1a1a1a]/50">
                   {testWindow

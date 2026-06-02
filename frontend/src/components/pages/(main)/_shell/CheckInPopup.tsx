@@ -13,7 +13,7 @@ export function CheckInPopup({
   open: boolean;
   variant?: "success" | "error";
   title: string;
-  subtitle?: string;
+  subtitle?: string | null;
   onClose: () => void;
 }) {
   const [clock, setClock] = useState("12:36");

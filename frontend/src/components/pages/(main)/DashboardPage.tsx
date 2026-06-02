@@ -136,7 +136,7 @@ export function DashboardPage() {
   const [popup, setPopup] = useState<{
     variant: "success" | "error";
     title: string;
-    subtitle: string;
+    subtitle?: string | null;
   } | null>(null);
 
   useEffect(() => {
