@@ -15,6 +15,21 @@ export function NokiaWidget({
   const [phase, setPhase] = useState<"typing" | "pausing" | "deleting">(
     "typing",
   );
+  const [clock, setClock] = useState("--:--");
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setClock(
+        `${String(now.getHours()).padStart(2, "0")}:${String(
+          now.getMinutes(),
+        ).padStart(2, "0")}`,
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -56,7 +71,7 @@ export function NokiaWidget({
         <div className="flex h-32 flex-col justify-between rounded-[12px] bg-[#B7C880] p-3 shadow-inner">
           <div className="flex items-center justify-between font-nokia text-[10px] text-[#2A3616]">
             <span aria-hidden>✉</span>
-            <span>12:36</span>
+            <span suppressHydrationWarning>{clock}</span>
           </div>
           <p className="font-nokia text-[14px] leading-tight text-[#2A3616] break-words min-h-[1.5em]">
             {text}
